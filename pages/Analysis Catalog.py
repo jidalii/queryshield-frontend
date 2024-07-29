@@ -31,16 +31,13 @@ if login:
 #else:
     #st.error("No input found. Please go to Create Analysis and enter some text.")
 
-def form_callback():
-    if "query_name" in st.session_state:
-        st.session_state.query_name
-
 
 
 if "query_name" in st.session_state:
     if "description" in st.session_state:
         col1, col2, col3, col4, col5= st.columns((1, 1, 1.5, 1, 1))
         with col1.markdown("**Analysis Name**"):
+
             col1.write(st.session_state.query_name)
         with col2.markdown("**Description**"):
             col2.write(st.session_state.description)
@@ -60,31 +57,32 @@ if "query_name" in st.session_state:
                 st.selectbox("Cloud Provider:", options=[st.session_state.cloud_provider])
             st.subheader('Analysis Details')
             if "query_name" in st.session_state:
-                st.text_input("Query Name" , st.session_state.query_name, on_change=None)
+                st.write(f"Query Name: {st.session_state.query_name}")
             if 'query' in st.session_state:
-                st.text_area('Query Entered', st.session_state.query, on_change=None)
+                st.write("Query Entered:")
+                st.code(st.session_state.query)
             if 'description' in st.session_state:
-                st.text_area("Description", st.session_state.description, on_change=None)
+                st.write(f"Description: {st.session_state.description}")
         col5.markdown("**Action**")
         col5.page_link("pages/Share Data.py")
 
-
+if "df" not in st.session_state:
+    st.session_state.df= pd.DataFrame(columns=["Analysis Name", "Description", "Owners Registered", "More Details", "Action"])
 if 'query_name' in st.session_state:
     if 'description' in st.session_state:
         data = {'Analysis Name': [st.session_state['query_name']], 'Description':[st.session_state['description']], 
                 "Owners Registered":"", 'More Details':"ⓘ", "Action":"https://effective-cod-pjgwpv5r6r5r3qjp-8501.app.github.dev/Share_Data"}
+        
+        user_input_df= pd.DataFrame(data)
+        st.session_state.df= pd.concat([st.session_state.df,user_input_df], ignore_index=True)
         df = pd.DataFrame(data)
-        st.dataframe(df,
+        st.dataframe(st.session_state.df,
         column_config={"Query Name":st.column_config.TextColumn(), 
                         "Description": st.column_config.TextColumn(), 
                         "More Details": st.column_config.LinkColumn('More Details'), 
                         "Action": st.column_config.LinkColumn('Action', display_text="Share Data")}, hide_index=False, use_container_width=True)
-        
-        #df= df.reset_index()
-        #df = df.reset_index().rename(columns={"index":"#"})		
-        #df = df.reset_index(drop=True)
-
-        
+    
+    
         
     
 

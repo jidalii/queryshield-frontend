@@ -25,16 +25,17 @@ if "user_input" in st.session_state:
     st.dataframe(df, hide_index=True, use_container_width=True)
 st.subheader("Threat Model")
 if "threat_model" in st.session_state:
-    st.radio("Threat Model:", options=[st.session_state.threat_model])
+    st.radio("Threat Model:", options=[st.session_state.threat_model], label_visibility="collapsed")
 if "cloud provider" in st.session_state:
     st.selectbox("Cloud Provider:", options=[st.session_state.cloud_provider])
 st.subheader('Analysis Details')
 if "query_name" in st.session_state:
-    #st.write(f'Query Name: {st.session_state.query_name}')
-    st.text_input("Query Name" , st.session_state.query_name)
+    st.write(f'Query Name: {st.session_state.query_name}')
+    #st.text_input("Query Name" , st.session_state.query_name)
 if 'query' in st.session_state:
-    #st.write(f'Query Entered: {st.session_state.query}')
-    st.text_area('Query Entered', st.session_state.query )
+    st.write("Query Entered:")
+    st.code(st.session_state.query)
+    #st.text_area('Query Entered', st.session_state.query )
 if 'description' in st.session_state:
-    #st.write(f'Description: {st.session_state.description}')
-    st.text_area("Description", st.session_state.description)
+    st.write(f'Description: {st.session_state.description}')
+    #st.text_area("Description", st.session_state.description)
