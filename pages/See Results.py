@@ -12,7 +12,7 @@ if "user_input" in st.session_state:
         if not column_name.empty:
             first_entry= column_name.iloc[0]
             df= pd.DataFrame(columns= [first_entry])
-            st.dataframe(df, hide_index=True)
+            st.dataframe(df, hide_index=True, width=200)
         else: st.write("The Data Schema is not defined.")
 
 

@@ -59,7 +59,11 @@ with st.form("Secret Share Data", clear_on_submit=True, border=False):
                 if entry:
                     entries.append(entry)
             df= pd.DataFrame(columns= [entries])
-            st.data_editor(df, hide_index=True, num_rows="dynamic", use_container_width=False)
+            #if any(st.session_state.user_input["Type"] == "Category"):
+                    #st.write([st.session_state.user_input['Column Name']])
+            st.data_editor(df, hide_index=True, num_rows="dynamic", use_container_width=False,) 
+                               #column_config={"placeholder":st.column_config.SelectboxColumn()})
+                
         
     st.markdown("<h3 style='text-align: center; color:black;'>or Upload as CSV </h3>", unsafe_allow_html=True)
 
