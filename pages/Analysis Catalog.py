@@ -53,8 +53,16 @@ if "query_name" in st.session_state:
             st.subheader("Threat Model")
             if "threat_model" in st.session_state:
                 st.radio("Threat Model:", options=[st.session_state.threat_model])
-            if "cloud provider" in st.session_state:
-                st.selectbox("Cloud Provider:", options=[st.session_state.cloud_provider])
+            if "AWS" in st.session_state:
+                st.toggle("AWS", value=st.session_state.AWS)
+            if "Microsoft" in st.session_state:
+                st.toggle("Microsoft", value=st.session_state.Microsoft)
+            if 'Google Cloud' in st.session_state:
+                st.toggle("Google Cloud", value=st.session_state.Google)
+            if 'Chameleon' in st.session_state:
+                st.toggle("Chameleon", value=st.session_state.Chameleon)
+            #if "cloud provider" in st.session_state:
+                #st.selectbox("Cloud Provider:", options=[st.session_state.cloud_provider])
             st.subheader('Analysis Details')
             if "query_name" in st.session_state:
                 st.write(f"Query Name: {st.session_state.query_name}")
@@ -68,11 +76,18 @@ if "query_name" in st.session_state:
 
 if "df" not in st.session_state:
     st.session_state.df= pd.DataFrame(columns=["Analysis Name", "Description", "Owners Registered", "More Details", "Action"])
+
+
 if 'query_name' in st.session_state:
     if 'description' in st.session_state:
         data = {'Analysis Name': [st.session_state['query_name']], 'Description':[st.session_state['description']], 
                 "Owners Registered":"", 'More Details':"ⓘ", "Action":"https://effective-cod-pjgwpv5r6r5r3qjp-8501.app.github.dev/Share_Data"}
-        
+
+
+if "Submit" not in st.session_state:
+    st.session_state.sumbitted=''
+
+if st.session_state.submitted:
         user_input_df= pd.DataFrame(data)
         st.session_state.df= pd.concat([st.session_state.df,user_input_df], ignore_index=True)
         df = pd.DataFrame(data)
