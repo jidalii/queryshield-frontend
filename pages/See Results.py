@@ -2,10 +2,23 @@ import streamlit as st
 import pandas as pd
 st.set_page_config("QueryShield")
 
+st.sidebar.title("QueryShield")
+login= st.sidebar.button("Login")
+@st.experimental_dialog("Login")
+def email_form():
+    with st.form('Login', border=True, clear_on_submit=True):
+        name=st.text_input('Name',key= "key1")
+        email=st.text_input('Email', key= "key2")
+        st.form_submit_button("Submit")
+if login:
+    email_form()
+
 if "query_name" in st.session_state:
         st.title(f'{st.session_state.query_name} Results')
 
-st.subheader("Analysis Results")
+if 'Sumbit' not in st.session_state:
+     st.session_state["Submit"]=False
+
 if "Submit" in st.session_state:
     if "user_input" in st.session_state:
         if "column name" in st.session_state:
@@ -14,7 +27,7 @@ if "Submit" in st.session_state:
                 first_entry= column_name.iloc[0]
                 df= pd.DataFrame(columns= [first_entry])
                 st.dataframe(df, hide_index=True, width=200)
-else:st.write("The Data Schema is not defined.")
+
 
 
 
@@ -28,6 +41,7 @@ if "Submit" and "disabled" in st.session_state:
         st.dataframe(df, hide_index=True, use_container_width=True)
     st.subheader("Threat Model")
     col1,col2=st.columns(2)
+    col2.write("Cloud Providers")
     if "threat_model" in st.session_state:
         col1.radio("Threat Model:", options=[st.session_state.threat_model], label_visibility="collapsed", disabled=st.session_state.disabled, on_change="disabled")
     if "AWS" in st.session_state:

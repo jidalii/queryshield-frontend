@@ -8,6 +8,7 @@ from io import StringIO
 st.set_page_config('QueryShield')
 
 st.title("Analysis Catalog")
+st.sidebar.title("QueryShield")
 login= st.sidebar.button("Login")
 @st.experimental_dialog("Login")
 def email_form():
@@ -34,7 +35,7 @@ if login:
 
 
 if "query_name" in st.session_state:
-    if "description" in st.session_state:
+    if "description" and "disabled" in st.session_state:
         col1, col2, col3, col4, col5= st.columns((1, 1, 1.5, 1, 1))
         with col1.markdown("**Analysis Name**"):
 
@@ -52,15 +53,16 @@ if "query_name" in st.session_state:
                 st.dataframe(df, hide_index=True, use_container_width=True)
             st.subheader("Threat Model")
             if "threat_model" in st.session_state:
-                st.radio("Threat Model:", options=[st.session_state.threat_model])
+                st.radio("Threat Model:", options=[st.session_state.threat_model], disabled= st.session_state.disabled, on_change="disabled")
+            st.write("Cloud Providers")
             if "AWS" in st.session_state:
-                st.toggle("AWS", value=st.session_state.AWS)
+                st.toggle("AWS", value=st.session_state.AWS, disabled= st.session_state.disabled, on_change="disabled")
             if "Microsoft" in st.session_state:
-                st.toggle("Microsoft", value=st.session_state.Microsoft)
+                st.toggle("Microsoft", value=st.session_state.Microsoft, disabled= st.session_state.disabled, on_change="disabled")
             if 'Google Cloud' in st.session_state:
-                st.toggle("Google Cloud", value=st.session_state.Google)
+                st.toggle("Google Cloud", value=st.session_state.Google, disabled= st.session_state.disabled, on_change="disabled")
             if 'Chameleon' in st.session_state:
-                st.toggle("Chameleon", value=st.session_state.Chameleon)
+                st.toggle("Chameleon", value=st.session_state.Chameleon, disabled=st.session_state.disabled, on_change='disabled')
             #if "cloud provider" in st.session_state:
                 #st.selectbox("Cloud Provider:", options=[st.session_state.cloud_provider])
             st.subheader('Analysis Details')
