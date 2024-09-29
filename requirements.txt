@@ -1,1 +1,3 @@
 streamlit
+SQLAlchemy
+mysql-connector-python-9.0.0
