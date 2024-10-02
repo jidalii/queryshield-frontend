@@ -1,13 +1,28 @@
+import asyncio
+import json
+import os
+import threading
+import random
+
 import streamlit as st
 import pandas as pd
 import numpy as np
-import altair as alt
-from streamlit_extras.stylable_container import stylable_container
-from st_aggrid import AgGrid, GridOptionsBuilder
+
+from dataclasses import dataclass
+from itertools import chain
+from multiprocessing.shared_memory import SharedMemory
+from typing import Any
+
 import sqlalchemy
 from sqlalchemy import create_engine
 
-import random
+from streamlit_extras.stylable_container import stylable_container
+from streamlit.components.v1 import html
+
+from streamlit.web.server import Server
+from streamlit.web.server.server import start_listening
+from tornado.web import RequestHandler
+
 
 st.set_page_config(
     page_title="QueryShield",
@@ -46,11 +61,140 @@ def submit_btn():
 
 st.title("Create New Analysis")
 
+_JS_TO_PD_COL_OFFSET: int = -2
+
+# Create shared memory for the payload
+try:
+    payload_memory = SharedMemory(name="JS_PAYLOAD", create=True, size=128)
+except FileExistsError:
+    payload_memory = SharedMemory(name="JS_PAYLOAD", create=False, size=128)
+
+
+@dataclass
+class Selection:
+    """Dataclass to store the selected cell information."""
+
+    col: int
+    row: int
+    sorted_by: int
+
+
+def sort_df_by_selected_col(table: pd.DataFrame, js_sorted_by: int) -> pd.DataFrame:
+    if js_sorted_by == 1:
+        return table
+    elif js_sorted_by == -1:
+        return table.sort_index(axis=0, ascending=False)
+    sorting_col: str = table.columns[abs(js_sorted_by) + _JS_TO_PD_COL_OFFSET]
+    return table.sort_values(by=sorting_col, ascending=js_sorted_by > 0)
+
+
+def _retrieve_payload() -> Selection:
+    """Retrieve the payload from the shared memory and return it as a tuple."""
+    payload = {}
+    if payload_memory.buf[0] != 0:
+        payload_bytes = bytearray(payload_memory.buf[:])
+        payload_str = payload_bytes.decode("utf-8").rstrip("\x00")
+        payload_length, payload = len(payload_str), json.loads(payload_str)
+        payload_memory.buf[:payload_length] = bytearray(payload_length)
+        print(f"payload:{payload}")
+    if payload:
+        selected_cell_info = Selection(
+            *(
+                int(val)
+                for val in chain(
+                    payload.get("cellId").split(","), [payload.get("sortedByCol")]
+                )
+            )
+        )
+        print(
+            f"{os.getpid()}::{threading.get_ident()}: Streamlit callback received payload: {selected_cell_info}"
+        )
+        return Selection(
+            selected_cell_info.col - 1,
+            selected_cell_info.row,
+            selected_cell_info.sorted_by,
+        )
+    else:
+        print(
+            f"{os.getpid()}::{threading.get_ident()}: Streamlit callback saw no payload"
+        )
+        return Selection(-1, -1, -1)
+
+
+def _interpret_payload(payload: Selection) -> tuple[Any, Any]:
+    """Interpret the payload and return the selected row and column."""
+    sorted_df = sort_df_by_selected_col(df, payload.sorted_by)
+    selected_row = payload.row if payload.row >= 0 else -1
+    selected_col = payload.col if payload.col >= 1 else -1
+
+    # Update a text field:
+    # selection_str = (
+    #     f", with contents: `{sorted_df.iat[payload.row, payload.col]}`"
+    #     if selected_col
+    #     else ""
+    # )
+    # st.session_state["CELL_ID"] = (
+    #     f"Clicked on cell with index [{selected_row}, {selected_col}]"
+    #     f" (at position [{payload.row}, {payload.col}])"
+    #     f"{selection_str}."
+    # )
+    return selected_row, selected_col
+
+
+def fake_click(*args, **kwargs):
+    parsed_payload: Selection = _retrieve_payload()
+    st.session_state["PAYLOAD"] = parsed_payload
+    selected_row, selected_col = _interpret_payload(parsed_payload)
+    st.session_state["cell_position"] = selected_row, selected_col
+
+
+class JSCallbackHandler(RequestHandler):
+    def set_default_headers(self):
+        # We hijack this method to store the JS payload
+        try:
+            payload: bytes = self.request.body
+            print(
+                f"{os.getpid()}::{threading.get_ident()}: Python received payload: {json.loads(payload)}"
+            )
+        except json.JSONDecodeError:
+            raise ValueError("Invalid JSON payload!")
+
+        if payload_memory.buf[0] == 0:
+            payload_memory.buf[: len(payload)] = payload
+            print(
+                f"{os.getpid()}::{threading.get_ident()}: Payload {payload} stored in shared memory"
+            )
+
+
+class CustomServer(Server):
+    async def start(self):
+        # Override the start of the Tornado server, so we can add custom handlers
+        app = self._create_app()
+
+        # Add a new handler
+        app.default_router.add_rules(
+            [
+                (r"/js_callback", JSCallbackHandler),
+            ]
+        )
+
+        # Our new rules go before the rule matching everything, reverse the list
+        app.default_router.rules = list(reversed(app.default_router.rules))
+
+        start_listening(app)
+        await self._runtime.start()
+
+
+# *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*//
+# *                          DATA SCHEMA                       *//
+# *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*//
 
 st.subheader("Data Schema")
 # with st.form("Submit", border=False, clear_on_submit=False):
 if "table_name" not in st.session_state:
     st.session_state["table_name"] = ""
+if "cell_position" not in st.session_state:
+    st.session_state["cell_position"] = ""
 
 st.session_state.table_name = st.text_input("Table Name")
 
@@ -63,8 +207,6 @@ if "user_input" not in st.session_state:
     st.session_state.user_input = pd.DataFrame()
 if "previous_df" not in st.session_state:
     st.session_state.previous_df = pd.DataFrame([])
-
-# AgGrid(st.session_state.user_input)
 
 
 def data_editor_changed():
@@ -88,6 +230,88 @@ def data_editor_changed():
 col1, col2 = st.columns([0.7, 0.3])
 df = pd.DataFrame(columns=["Column Name", "Units (e.g.lbs, kg, MM/dd/yyyy)", "Type"])
 numbers = ["Integer", "Varchar", "String", "Float", "Category"]
+
+df_category = pd.DataFrame(columns=["Category"])
+
+
+html_contents = """
+<script defer>
+const fakeButton = window.parent.document.querySelector("[data-testid^='stBaseButton-primary']");
+const tbl = window.parent.document.querySelector("[data-testid^='stDataFrameResizable']");
+const canvas = window.parent.document.querySelector("[data-testid^='data-grid-canvas']");
+let sortedBy = 1
+function sendPayload(obj) {
+    payloadStr = JSON.stringify(obj);
+    window.sessionStorage.setItem("payload", payloadStr);
+    fetch('/js_callback', {
+        method: 'POST',
+        body: payloadStr,
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => {
+        fakeButton.click();
+    });    
+}
+function updateColumnValue() {
+    const headers = canvas.querySelectorAll('th[role="columnheader"]');
+    let arrowFound = false;
+    
+    headers.forEach(header => {
+        const textContent = header.textContent.trim();
+        const colIndex = parseInt(header.getAttribute('aria-colindex'), 10);
+        if (textContent.startsWith('↑')) {
+            sortedBy = colIndex;
+            arrowFound = true;
+        } else if (textContent.startsWith('↓')) {
+            sortedBy = -colIndex;
+            arrowFound = true;
+        }
+    });
+    if (!arrowFound) {
+        sortedBy = 1;
+    }    
+    console.log(`Sorting column is now: ${sortedBy}`);
+}
+const sortObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+        if (mutation.type === 'characterData' || mutation.type === 'childList') {
+            updateColumnValue();
+        }
+    });
+}); 
+// Observe changes in the canvas element and its subtree
+sortObserver.observe(canvas, {
+    characterData: true,
+    childList: true,
+    subtree: true
+});
+function handleTableClick(event) {
+    // MutationObserver callback function
+    const cellObserverCallback = (mutationsList, observer) => {
+        for (const mutation of mutationsList) {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'aria-selected') {
+                const target = mutation.target;
+                if (target.tagName === 'TD' && target.getAttribute('aria-selected') === 'true') {
+                    cellCoords = target.id.replace('glide-cell-','').replace('-',',');
+                    console.log(`Detected click on cell {${cellCoords}}, sorted by column "${sortedBy}"`);
+                    observer.disconnect(); // Stop observing once the element is found                    
+                    sendPayload({"action": "click", "cellId": cellCoords, "sortedByCol": sortedBy});                    
+                }
+            }
+        }
+    };
+    // Create a MutationObserver
+    const cellObserver = new MutationObserver(cellObserverCallback);  
+    // Observe changes in attributes in the subtree of the canvas element
+    cellObserver.observe(canvas, { attributes: true, subtree: true });
+}
+tbl.addEventListener('click', handleTableClick)
+console.log("Event listeners added!");
+</script>
+"""
+
 st.session_state.user_input = col1.data_editor(
     df,
     column_config={
@@ -102,8 +326,9 @@ st.session_state.user_input = col1.data_editor(
     num_rows="dynamic",
     hide_index=True,
     use_container_width=True,
-    on_change=data_editor_changed,
+    # on_change=data_editor_changed,
 )
+
 
 if "category_schema" not in st.session_state:
     st.session_state.category_schema = {}
@@ -119,88 +344,65 @@ def add_row(row_index):
 
 
 for index, entry in enumerate(st.session_state.user_input["Type"]):
-    if entry == "Category":
+    if entry == "Category" and index == st.session_state["cell_position"][0]:
         column_name = st.session_state.user_input["Column Name"]
-        if st.session_state.category_schema.get(index) == None:
-            st.session_state.category_schema[index] = []
+        if index not in st.session_state.category_schema:
+            st.session_state.category_schema[index] = pd.DataFrame(columns=["Category"])
 
-        if col2.button("Add Row", key=f"add_row_{index}"):
-            add_row(index)
+        # col2.markdown(f"##### {column_name.iloc[index]}:")
+        # if col2.button("Add Row", key=f"add_row_{index}"):
+        #     add_row(index)
 
-        for i in range(len(st.session_state.category_schema[index])):
-            sub_col1, sub_col2 = col2.columns([0.1, 0.9])
-            st.session_state.category_schema[index][i] = sub_col2.text_input(
-                "",
-                label_visibility="collapsed",
-                value=st.session_state.category_schema[index][i],
-                key=f"Category Input Box_{index}_{i}",
-            )
-            if sub_col1.button("X", key=f"del_row_{index}_{i}"):
-                del_row(index, i)
-                st.rerun()
-        # column_name = st.session_state.user_input["Column Name"][index]
+        # for i in range(len(st.session_state.category_schema[index])):
+        #     sub_col1, sub_col2 = col2.columns([0.1, 0.9])
+        #     st.session_state.category_schema[index][i] = sub_col2.text_input(
+        #         "",
+        #         label_visibility="collapsed",
+        #         value=st.session_state.category_schema[index][i],
+        #         key=f"Category Input Box_{index}_{i}",
+        #     )
+        #     if sub_col1.button("X", key=f"del_row_{index}_{i}"):
+        #         del_row(index, i)
+        #         st.rerun()
+        st.session_state.category_schema[index] = col2.data_editor(
+            st.session_state.category_schema[index],
+            column_config={
+                "Category": st.column_config.TextColumn(),
+            },
+            num_rows="dynamic",
+            hide_index=True,
+            use_container_width=True,
+        )
 
-        # # Determine if this entry is selected and highlight the cell if necessary
-        # cell_style = "selected-cell" if st.session_state.selected_category_index == index else ""
 
-        # # Create a button-like cell for each type, when clicked it will show the Category editor
-        # if st.button(f"{entry}", key=f"type_button_{index}"):
-        #     if entry == "Category":
-        #         st.session_state.selected_category_index = index  # Select this category for editing
-        #     else:
-        #         st.session_state.selected_category_index = None  # Deselect if not "Category"
+st.text_input(
+    label="N/A",
+    label_visibility="hidden",
+    key="CELL_ID",
+    disabled=True,
+    help="Click on a cell...",
+)
 
-        # # Display the type with conditional coloring for selected "Category"
-        # st.markdown(f"<div class='{cell_style}'>{entry}</div>", unsafe_allow_html=True)
-
-        # # If the current type is "Category" and selected, show the category editing list
-        # if entry == "Category" and st.session_state.selected_category_index == index:
-        #     # Initialize category_schema for each category if it doesn't exist
-        #     if st.session_state.category_schema.get(index) is None:
-        #         st.session_state.category_schema[index] = []
-
-        #     st.write(f"Editing Category: {column_name}")
-
-        #     # Add a new row button
-        #     if st.button("Add Row", key=f"add_row_{index}"):
-        #         add_row(index)
-
-        #     # Creating layout for category input and delete button
-        #     for i in range(len(st.session_state.category_schema[index])):
-        #         sub_col1, sub_col2 = st.columns([0.1, 0.9])  # Ensure consistent layout
-        #         # Text input for each category schema entry in sub_col2
-        #         st.session_state.category_schema[index][i] = sub_col2.text_input(
-        #             "",
-        #             label_visibility="collapsed",
-        #             value=st.session_state.category_schema[index][i],
-        #             key=f"Category Input Box_{index}_{i}",
-        #         )
-        #         # Delete button for each row in sub_col1
-        #         if sub_col1.button("X", key=f"del_row_{index}_{i}"):
-        #             del_row(index, i)
-
+# Create a fake button:
+st.button("", key="fakeButton", on_click=fake_click, type="primary")
+st.markdown(
+    """
+    <style>
+    div[data-testid="stTextInput"][data-st-key="CELL_ID"] {
+        visibility: hidden;
+    }
+    button[kind="primary"] {
+        visibility: hidden;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+html(html_contents)
 
 st.write(st.session_state.category_schema)
 st.write(st.session_state.user_input)
-st.write(st.session_state.previous_df)
-
-
-# if any(st.session_state.user_input["Type"] == "Category"):
-# df= pd.DataFrame(columns=[st.session_state.user_input["Column Name"]])
-# st.data_editor(df, num_rows="dynamic", use_container_width=True )
-
-# col1, col2= st.columns(2)
-# col1.text_input(f'Enter Category Name for {st.session_state.user_input['Column Name']}')
-# @st.experimental_dialog(f'Enter Categories')
-# def specify():
-# if st.session_state.user_input['Column Name'] not in st.session_state:
-# st.session_state.user_input['Column Name']=''
-# df=pd.DataFrame(columns=[st.session_state.user_input["Column Name"]])
-# st.data_editor(df, num_rows="dynamic", use_container_width=True )
-# confirm= st.button("Confirm", help=None)
-# if confirm:
-# st.button('Test')
-# specify()
+st.write(f"position: {st.session_state.cell_position}")
 
 
 column_name = st.session_state.user_input.get("Column Name", "")
@@ -213,9 +415,16 @@ if "user input" not in st.session_state:
 st.divider()
 
 validation_css = {
+    "init": """
+        {
+            background-color: #FFFFFF;
+            border-radius: 10px;
+            padding: 15px;
+        }
+        """,
     True: """
             {
-                background-color: #FFFFF;
+                background-color: #d7f8d8;
                 border-radius: 10px;
                 padding: 15px;
             }
@@ -238,32 +447,36 @@ if "threat_model" not in st.session_state:
     st.session_state["threat model"] = ""
 if "selected_providers" not in st.session_state:
     st.session_state.selected_providers = []
-if "cloud provider" not in st.session_state:
-    st.session_state["cloud provider"] = ""
 if "isvalid_threat_model" not in st.session_state:
-    st.session_state["isvalid_threat_model"] = 1
+    st.session_state["isvalid_threat_model"] = "init"
 if "isvalid_analysis_details" not in st.session_state:
-    st.session_state["isvalid_analysis_details"] = 1
+    st.session_state["isvalid_analysis_details"] = "init"
 if "isvalid_sql" not in st.session_state:
     st.session_state["isvalid_sql"] = True
 
 st.subheader("Threat Model")
 
+cloud_providers = [
+    "AWS",
+    "Microsoft Azure",
+    "Google Cloud",
+    "Chameleon Open Cloud",
+    "Cloud 1",
+    "Cloud 2",
+]
+
+threat_models = ["Semi-Honest", "Malicious"]
+
 
 def threat_model_container() -> None:
-
-    cloud_providers = [
-        "AWS",
-        "Microsoft Azure",
-        "Google Cloud",
-        "Chameleon Open Cloud",
-        "Cloud 1",
-        "Cloud 2",
-    ]
-    threat_models = ["Semi-Honest", "Malicious"]
+    css_style = (
+        "init"
+        if st.session_state.isvalid_threat_model == "init"
+        else st.session_state.isvalid_threat_model == 1
+    )
     with stylable_container(
         key="thread_model",
-        css_styles=validation_css[st.session_state.isvalid_threat_model == 1],
+        css_styles=validation_css[css_style],
     ):
         col1, col2 = st.columns(2)
         new_threat_model = col1.radio(
@@ -382,11 +595,13 @@ def validate_sql():
 
 
 def analysis_details_container() -> None:
+    if st.session_state.isvalid_analysis_details == "init":
+        css_style = "init"
+    else:
+        css_style = st.session_state.isvalid_analysis_details == 1
     with stylable_container(
         key="analysis_details_model",
-        css_styles=validation_css[
-            st.session_state.isvalid_analysis_details == 1
-        ],
+        css_styles=validation_css[css_style],
     ):
         st.session_state.query_name = st.text_input("Query Name")
 
@@ -431,7 +646,6 @@ def validate_threat_model() -> bool:
     if st.session_state.threat_model == "Semi-Honest":
         if len(st.session_state.selected_providers) >= 3:
             st.session_state.isvalid_threat_model = 1
-            st.success("Success")
             return True
         elif len(st.session_state.selected_providers) < 3:
             st.session_state.isvalid_threat_model = 2
@@ -439,11 +653,11 @@ def validate_threat_model() -> bool:
     if st.session_state.threat_model == "Malicious":
         if len(st.session_state.selected_providers) >= 4:
             st.session_state.isvalid_threat_model = 1
-            st.success("Success")
             return True
         elif len(st.session_state.selected_providers) < 4:
             st.session_state.isvalid_threat_model = 3
             return False
+    return False
 
 
 def validate_analysis_details() -> bool:
@@ -458,9 +672,10 @@ def validate_analysis_details() -> bool:
         isValid = validate_sql()
         if isValid:
             st.session_state["isvalid_analysis_details"] = 1
+            return True
         else:
             st.session_state["isvalid_analysis_details"] = 3
-        return True
+            return False
 
 
 if st.session_state.submitted:
@@ -484,4 +699,31 @@ if st.session_state.submitted:
 
     st.rerun()
 
+    if (
+        st.session_state["isvalid_analysis_details"] == 1
+        and st.session_state["isvalid_analysis_details"] == 1
+    ):
+        st.success("Success")
+
 st.write(st.session_state)
+
+if __name__ == "__main__":
+    import streamlit.web.bootstrap
+
+    if "__streamlitmagic__" not in locals():
+        # Code adapted from bootstrap.py in streamlit
+        streamlit.web.bootstrap._fix_sys_path(__file__)
+        streamlit.web.bootstrap._fix_tornado_crash()
+        streamlit.web.bootstrap._fix_sys_argv(__file__, [])
+        streamlit.web.bootstrap._fix_pydeck_mapbox_api_warning()
+        # streamlit.web.bootstrap._fix_pydantic_duplicate_validators_error()
+
+        server = CustomServer(__file__, is_hello=False)
+
+        async def run_server():
+            await server.start()
+            streamlit.web.bootstrap._on_server_start(server)
+            streamlit.web.bootstrap._set_up_signal_handler(server)
+            await server.stopped
+
+        asyncio.run(run_server())
