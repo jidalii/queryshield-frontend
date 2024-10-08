@@ -96,7 +96,6 @@ def _retrieve_payload() -> Selection:
         payload_str = payload_bytes.decode("utf-8").rstrip("\x00")
         payload_length, payload = len(payload_str), json.loads(payload_str)
         payload_memory.buf[:payload_length] = bytearray(payload_length)
-        print(f"payload:{payload}")
     if payload:
         selected_cell_info = Selection(
             *(
@@ -125,27 +124,16 @@ def _interpret_payload(payload: Selection) -> tuple[Any, Any]:
     """Interpret the payload and return the selected row and column."""
     sorted_df = sort_df_by_selected_col(df, payload.sorted_by)
     selected_row = payload.row if payload.row >= 0 else -1
-    selected_col = payload.col if payload.col >= 1 else -1
+    selected_col = payload.col if payload.col >= 0 else -1
 
-    # Update a text field:
-    # selection_str = (
-    #     f", with contents: `{sorted_df.iat[payload.row, payload.col]}`"
-    #     if selected_col
-    #     else ""
-    # )
-    # st.session_state["CELL_ID"] = (
-    #     f"Clicked on cell with index [{selected_row}, {selected_col}]"
-    #     f" (at position [{payload.row}, {payload.col}])"
-    #     f"{selection_str}."
-    # )
     return selected_row, selected_col
 
 
 def fake_click(*args, **kwargs):
     parsed_payload: Selection = _retrieve_payload()
-    st.session_state["PAYLOAD"] = parsed_payload
     selected_row, selected_col = _interpret_payload(parsed_payload)
-    st.session_state["cell_position"] = selected_row, selected_col
+    if selected_col != -1 or selected_row != -1:
+        st.session_state["cell_position"] = selected_row, selected_col
 
 
 class JSCallbackHandler(RequestHandler):
@@ -194,7 +182,7 @@ st.subheader("Data Schema")
 if "table_name" not in st.session_state:
     st.session_state["table_name"] = ""
 if "cell_position" not in st.session_state:
-    st.session_state["cell_position"] = ""
+    st.session_state["cell_position"] = (0, 0)
 
 st.session_state.table_name = st.text_input("Table Name")
 
@@ -207,32 +195,14 @@ if "user_input" not in st.session_state:
     st.session_state.user_input = pd.DataFrame()
 if "previous_df" not in st.session_state:
     st.session_state.previous_df = pd.DataFrame([])
+if "category_schema" not in st.session_state:
+    st.session_state.category_schema = {}
+if "schema_types" not in st.session_state:
+    st.session_state.schema_types = []
 
 
-def data_editor_changed():
-    user_input = st.session_state.user_input
-    previous_df = st.session_state.previous_df
-
-    for index, (row_current, row_previous) in enumerate(
-        zip(user_input.iterrows(), previous_df.iterrows())
-    ):
-        _, current_row = row_current
-        _, previous_row = row_previous
-        if not current_row.equals(previous_row):
-            if current_row.iloc[-1] != previous_row.iloc[-1]:
-                st.session_state.last_active_category_index = index
-
-    # Update the previous_df with the current state
-    st.session_state.previous_df = user_input.copy()
-    st.write(st.session_state.last_active_category_index)
-
-
-col1, col2 = st.columns([0.7, 0.3])
 df = pd.DataFrame(columns=["Column Name", "Units (e.g.lbs, kg, MM/dd/yyyy)", "Type"])
-numbers = ["Integer", "Varchar", "String", "Float", "Category"]
-
-df_category = pd.DataFrame(columns=["Category"])
-
+schema_types = ["Integer", "Varchar", "String", "Float", "Category"]
 
 html_contents = """
 <script defer>
@@ -312,78 +282,116 @@ console.log("Event listeners added!");
 </script>
 """
 
-st.session_state.user_input = col1.data_editor(
-    df,
-    column_config={
-        "Type": st.column_config.SelectboxColumn(
-            "Type",
-            options=numbers,
-            default="Integer",
-        ),
-        "Column Name": st.column_config.TextColumn(),
-        "Units (e.g.lbs, kg, MM/dd/yyyy)": st.column_config.TextColumn(),
-    },
-    num_rows="dynamic",
-    hide_index=True,
-    use_container_width=True,
-    # on_change=data_editor_changed,
-)
+def schema_container():
+    col1, col2 = st.columns([0.7, 0.3])
+    st.session_state.user_input = col1.data_editor(
+        df,
+        column_config={
+            "Type": st.column_config.SelectboxColumn(
+                "Type",
+                options=schema_types,
+                default="Integer",
+            ),
+            "Column Name": st.column_config.TextColumn(),
+            "Units (e.g.lbs, kg, MM/dd/yyyy)": st.column_config.TextColumn(),
+        },
+        num_rows="dynamic",
+        hide_index=True,
+        use_container_width=True,
+    )
+
+    st.session_state.schema_types = st.session_state.user_input['Type'].tolist()
+    if "category_df" not in st.session_state:
+        st.session_state.category_df = {}
+
+    if "active_category" not in st.session_state:
+        st.session_state.active_category = [False, -1]
+        
+    # def store_df(index):
+    #     st.session_state.category_df[index] = st.session_state.category_schema[index].reset_index(drop=True)
+        
+    for index, entry in enumerate(st.session_state.user_input["Type"]):
+        if (entry == "Category" or entry not in schema_types) and index == st.session_state["cell_position"][0]:
+            st.session_state.active_category = [True, index]
+            column_name = st.session_state.user_input["Column Name"]
 
 
-if "category_schema" not in st.session_state:
-    st.session_state.category_schema = {}
+            if index not in st.session_state.category_df:
+                print("category_df not found")
+                st.session_state.category_df[index] = pd.DataFrame(columns=['Category'])
 
+            height = 5 + 35 * index
+            col2.html(
+                f"<p style='height: {height}px;'></p>"
+            )
+            # col2.button("Store", on_click=store_df(index))
+            st.session_state.category_schema[index] = col2.data_editor(
+                st.session_state.category_df[index],
+                column_config={
+                    "Category": st.column_config.TextColumn(),
+                },
+                num_rows="dynamic",
+                hide_index=True,
+                use_container_width=True,
+                # on_change=store_df(index)
+            )
+            
+            st.session_state.category_df[index] = st.session_state.category_schema[index].reset_index(drop=True)
 
-def del_row(row_index, i):
-    if len(st.session_state.category_schema[row_index]) > i:
-        st.session_state.category_schema[row_index].pop(i)
+    for i in range(len(st.session_state.schema_types)):
+        if i in st.session_state.category_schema:
+            schema_type = st.session_state.schema_types[i]
+            category_value = st.session_state.category_schema[i]['Category']
+            
+            # Perform your condition with proper checks
+            if schema_type not in schema_types or (schema_type == "Category" and category_value.empty):
+                st.session_state.user_input.at[i, 'Type'] = st.session_state.category_schema[i]
+                
+schema_container()
+# if st.session_state.active_category[0]:
+#     print("in if")
+#     index = st.session_state.active_category[1]
+#     print("current index:", index)
+#     if index not in st.session_state.category_df:
+#         st.session_state.category_df[index] = pd.Series(dtype='str').copy()
 
+#     height = 5 + 35 * index
+#     col2.html(f"<p style='height: {height}px;'></p>")
+    
+#     if index not in st.session_state.category_schema:
+#         st.session_state.category_schema[index] = pd.Series([], dtype='str')
+#     if index not in st.session_state.category_df:
+#         st.session_state.category_df[index] = pd.Series([],dtype='str')
+#     print(st.session_state.category_df[index])
+#     # if not st.session_state.category_schema[index].empty:
+#     #     category_df = st.session_state.category_schema[index].copy()
+#     # if not st.session_state.category_schema[index].empty:
+#         # if isinstance(st.session_state.category_schema[index], pd.DataFrame):
+#         #     # Copy only "Category" column
+#         #     category_df = st.session_state.category_schema[index]["Category"].copy()
+#         # elif isinstance(st.session_state.category_schema[index], pd.Series):
+#         # category_df = st.session_state.category_schema[index].copy()
+#     st.session_state.category_schema[index] = col2.data_editor(
+#         st.session_state.category_df[index],
+#         column_config={
+#             "Category": st.column_config.TextColumn(),
+#         },
+#         num_rows="dynamic",
+#         hide_index=True,
+#         use_container_width=True,
+#         # on_change=update_category_df(index)
+#     )
+#     st.session_state.category_df[index] = st.session_state.category_schema[index]
 
-def add_row(row_index):
-    st.session_state.category_schema[row_index].append("")
+# st.text_input(
+#     label="N/A",
+#     label_visibility="hidden",
+#     key="CELL_ID",
+#     disabled=True,
+#     help="Click on a cell...",
+# )
 
-
-for index, entry in enumerate(st.session_state.user_input["Type"]):
-    if entry == "Category" and index == st.session_state["cell_position"][0]:
-        column_name = st.session_state.user_input["Column Name"]
-        if index not in st.session_state.category_schema:
-            st.session_state.category_schema[index] = pd.DataFrame(columns=["Category"])
-
-        # col2.markdown(f"##### {column_name.iloc[index]}:")
-        # if col2.button("Add Row", key=f"add_row_{index}"):
-        #     add_row(index)
-
-        # for i in range(len(st.session_state.category_schema[index])):
-        #     sub_col1, sub_col2 = col2.columns([0.1, 0.9])
-        #     st.session_state.category_schema[index][i] = sub_col2.text_input(
-        #         "",
-        #         label_visibility="collapsed",
-        #         value=st.session_state.category_schema[index][i],
-        #         key=f"Category Input Box_{index}_{i}",
-        #     )
-        #     if sub_col1.button("X", key=f"del_row_{index}_{i}"):
-        #         del_row(index, i)
-        #         st.rerun()
-        st.session_state.category_schema[index] = col2.data_editor(
-            st.session_state.category_schema[index],
-            column_config={
-                "Category": st.column_config.TextColumn(),
-            },
-            num_rows="dynamic",
-            hide_index=True,
-            use_container_width=True,
-        )
-
-
-st.text_input(
-    label="N/A",
-    label_visibility="hidden",
-    key="CELL_ID",
-    disabled=True,
-    help="Click on a cell...",
-)
-
-# Create a fake button:
+# # Create a fake button:
 st.button("", key="fakeButton", on_click=fake_click, type="primary")
 st.markdown(
     """
@@ -467,7 +475,6 @@ cloud_providers = [
 
 threat_models = ["Semi-Honest", "Malicious"]
 
-
 def threat_model_container() -> None:
     css_style = (
         "init"
@@ -539,6 +546,7 @@ type_mapping = {
     "Integer": "INT",
     "Float": "FLOAT",
     "Boolean": "BOOLEAN",
+    "Category": "TEXT",
 }
 
 
@@ -592,7 +600,6 @@ def validate_sql():
     except Exception as e:
         print(e)
         return False
-
 
 def analysis_details_container() -> None:
     if st.session_state.isvalid_analysis_details == "init":
@@ -695,15 +702,16 @@ if st.session_state.submitted:
     st.session_state["Submit"] = st.session_state.submitted
 
     if validate_threat_model() and validate_analysis_details():
-        pass
+        st.rerun()
+    else:
+        st.rerun()
 
-    st.rerun()
-
-    if (
-        st.session_state["isvalid_analysis_details"] == 1
-        and st.session_state["isvalid_analysis_details"] == 1
-    ):
-        st.success("Success")
+if (
+    st.session_state["isvalid_analysis_details"] == 1
+    and st.session_state["isvalid_analysis_details"] == 1
+):
+    st.success("Success")
+        
 
 st.write(st.session_state)
 
