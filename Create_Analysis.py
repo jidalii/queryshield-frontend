@@ -6,7 +6,6 @@ import random
 
 import streamlit as st
 import pandas as pd
-import numpy as np
 
 from dataclasses import dataclass
 from itertools import chain
@@ -15,6 +14,7 @@ from typing import Any
 
 import sqlalchemy
 from sqlalchemy import create_engine
+import psycopg2
 
 from streamlit_extras.stylable_container import stylable_container
 from streamlit.components.v1 import html
@@ -122,7 +122,7 @@ def _retrieve_payload() -> Selection:
 
 def _interpret_payload(payload: Selection) -> tuple[Any, Any]:
     """Interpret the payload and return the selected row and column."""
-    sorted_df = sort_df_by_selected_col(df, payload.sorted_by)
+    # sorted_df = sort_df_by_selected_col(df, payload.sorted_by)
     selected_row = payload.row if payload.row >= 0 else -1
     selected_col = payload.col if payload.col >= 0 else -1
 
@@ -184,24 +184,40 @@ if "table_name" not in st.session_state:
 if "cell_position" not in st.session_state:
     st.session_state["cell_position"] = (0, 0)
 
-st.session_state.table_name = st.text_input("Table Name")
+if "create_analysis_input" not in st.session_state:
+    st.session_state["create_analysis_input"] = {}
+    
+create_analysis_input = st.session_state["create_analysis_input"]
 
-if "last_active_category_index" not in st.session_state:
-    st.session_state.last_active_category_index = 0
-if "selected_category_index" not in st.session_state:
-    st.session_state.selected_category_index = 0
+if "table_name" not in create_analysis_input:
+    create_analysis_input["table_name"] = ""
 
-if "user_input" not in st.session_state:
-    st.session_state.user_input = pd.DataFrame()
+
+
+create_analysis_input["table_name"] = st.text_input(
+    "Table Name", create_analysis_input["table_name"]
+)
+
+if "user_input" not in create_analysis_input:
+    create_analysis_input["user_input"] = pd.DataFrame()
 if "previous_df" not in st.session_state:
     st.session_state.previous_df = pd.DataFrame([])
-if "category_schema" not in st.session_state:
-    st.session_state.category_schema = {}
+
+
+if "category_schema" not in create_analysis_input:
+    create_analysis_input["category_schema"] = {}
+
 if "schema_types" not in st.session_state:
     st.session_state.schema_types = []
 
+if "user_input_changed" not in st.session_state:
+    st.session_state.user_input_changed = 0
+st.write(st.session_state.user_input_changed)
 
-df = pd.DataFrame(columns=["Column Name", "Units (e.g.lbs, kg, MM/dd/yyyy)", "Type"])
+df = pd.DataFrame(columns=["name", "units", "type"])
+if "last_user_input" in create_analysis_input and (st.session_state['user_input_changed'] == 0 or st.session_state['user_input_changed'] == 1):
+    df = create_analysis_input["last_user_input"].reset_index(drop=True)
+    # st.session_state.user_input_changed = False
 schema_types = ["Integer", "Varchar", "String", "Float", "Category"]
 
 html_contents = """
@@ -282,50 +298,56 @@ console.log("Event listeners added!");
 </script>
 """
 
+
 def schema_container():
+    # def update_user_input_changed():
+    #     st.session_state.user_input_changed = -1
+
     col1, col2 = st.columns([0.7, 0.3])
-    st.session_state.user_input = col1.data_editor(
+
+    conlumn_config = {
+        "type": st.column_config.SelectboxColumn(
+            "Type",
+            options=schema_types,
+            default="Integer",
+        ),
+        "name": st.column_config.TextColumn("Column Name"),
+        "units": st.column_config.TextColumn("Units (e.g.lbs, kg, MM/dd/yyyy)"),
+    }
+    create_analysis_input["user_input"] = col1.data_editor(
         df,
-        column_config={
-            "Type": st.column_config.SelectboxColumn(
-                "Type",
-                options=schema_types,
-                default="Integer",
-            ),
-            "Column Name": st.column_config.TextColumn(),
-            "Units (e.g.lbs, kg, MM/dd/yyyy)": st.column_config.TextColumn(),
-        },
+        column_config=conlumn_config,
         num_rows="dynamic",
         hide_index=True,
         use_container_width=True,
+        # on_change=update_user_input_changed()
     )
 
-    st.session_state.schema_types = st.session_state.user_input['Type'].tolist()
+    st.session_state.schema_types = create_analysis_input["user_input"]["type"].tolist()
     if "category_df" not in st.session_state:
         st.session_state.category_df = {}
 
     if "active_category" not in st.session_state:
         st.session_state.active_category = [False, -1]
-        
-    # def store_df(index):
-    #     st.session_state.category_df[index] = st.session_state.category_schema[index].reset_index(drop=True)
-        
-    for index, entry in enumerate(st.session_state.user_input["Type"]):
-        if (entry == "Category" or entry not in schema_types) and index == st.session_state["cell_position"][0]:
+
+    def store_df(index):
+        if str(index) in st.session_state.category_df:
+            st.session_state.category_df[index] = create_analysis_input[
+                "category_schema"
+            ][index].reset_index(drop=True)
+
+    for index, entry in enumerate(create_analysis_input["user_input"]["type"]):
+        if (
+            entry == "Category" or entry not in schema_types
+        ) and index == st.session_state["cell_position"][0]:
             st.session_state.active_category = [True, index]
-            column_name = st.session_state.user_input["Column Name"]
-
-
             if index not in st.session_state.category_df:
                 print("category_df not found")
-                st.session_state.category_df[index] = pd.DataFrame(columns=['Category'])
+                st.session_state.category_df[index] = pd.DataFrame(columns=["Category"])
 
             height = 5 + 35 * index
-            col2.html(
-                f"<p style='height: {height}px;'></p>"
-            )
-            # col2.button("Store", on_click=store_df(index))
-            st.session_state.category_schema[index] = col2.data_editor(
+            col2.html(f"<p style='height: {height}px;'></p>")
+            create_analysis_input["category_schema"][index] = col2.data_editor(
                 st.session_state.category_df[index],
                 column_config={
                     "Category": st.column_config.TextColumn(),
@@ -333,63 +355,15 @@ def schema_container():
                 num_rows="dynamic",
                 hide_index=True,
                 use_container_width=True,
-                # on_change=store_df(index)
+                # on_change=store_df(index),
             )
-            
-            st.session_state.category_df[index] = st.session_state.category_schema[index].reset_index(drop=True)
 
-    for i in range(len(st.session_state.schema_types)):
-        if i in st.session_state.category_schema:
-            schema_type = st.session_state.schema_types[i]
-            category_value = st.session_state.category_schema[i]['Category']
-            
-            # Perform your condition with proper checks
-            if schema_type not in schema_types or (schema_type == "Category" and category_value.empty):
-                st.session_state.user_input.at[i, 'Type'] = st.session_state.category_schema[i]
-                
+            st.session_state.category_df[index] = create_analysis_input[
+                "category_schema"
+            ][index].reset_index(drop=True)
+
+
 schema_container()
-# if st.session_state.active_category[0]:
-#     print("in if")
-#     index = st.session_state.active_category[1]
-#     print("current index:", index)
-#     if index not in st.session_state.category_df:
-#         st.session_state.category_df[index] = pd.Series(dtype='str').copy()
-
-#     height = 5 + 35 * index
-#     col2.html(f"<p style='height: {height}px;'></p>")
-    
-#     if index not in st.session_state.category_schema:
-#         st.session_state.category_schema[index] = pd.Series([], dtype='str')
-#     if index not in st.session_state.category_df:
-#         st.session_state.category_df[index] = pd.Series([],dtype='str')
-#     print(st.session_state.category_df[index])
-#     # if not st.session_state.category_schema[index].empty:
-#     #     category_df = st.session_state.category_schema[index].copy()
-#     # if not st.session_state.category_schema[index].empty:
-#         # if isinstance(st.session_state.category_schema[index], pd.DataFrame):
-#         #     # Copy only "Category" column
-#         #     category_df = st.session_state.category_schema[index]["Category"].copy()
-#         # elif isinstance(st.session_state.category_schema[index], pd.Series):
-#         # category_df = st.session_state.category_schema[index].copy()
-#     st.session_state.category_schema[index] = col2.data_editor(
-#         st.session_state.category_df[index],
-#         column_config={
-#             "Category": st.column_config.TextColumn(),
-#         },
-#         num_rows="dynamic",
-#         hide_index=True,
-#         use_container_width=True,
-#         # on_change=update_category_df(index)
-#     )
-#     st.session_state.category_df[index] = st.session_state.category_schema[index]
-
-# st.text_input(
-#     label="N/A",
-#     label_visibility="hidden",
-#     key="CELL_ID",
-#     disabled=True,
-#     help="Click on a cell...",
-# )
 
 # # Create a fake button:
 st.button("", key="fakeButton", on_click=fake_click, type="primary")
@@ -408,17 +382,16 @@ st.markdown(
 )
 html(html_contents)
 
-st.write(st.session_state.category_schema)
-st.write(st.session_state.user_input)
 st.write(f"position: {st.session_state.cell_position}")
+st.write(create_analysis_input)
+st.write(create_analysis_input["category_schema"])
+st.write(st.session_state.schema_types)
 
 
-column_name = st.session_state.user_input.get("Column Name", "")
-if "column name" not in st.session_state:
-    st.session_state["column name"] = ""
+column_name = create_analysis_input["user_input"].get(
+    "Column Name", ""
+)
 
-if "user input" not in st.session_state:
-    st.session_state["user input"] = ""
 
 st.divider()
 
@@ -451,10 +424,10 @@ validation_css = {
 # *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*//
 
 # ********** SESSION INITILIAZARION **********
-if "threat_model" not in st.session_state:
-    st.session_state["threat model"] = ""
-if "selected_providers" not in st.session_state:
-    st.session_state.selected_providers = []
+if "threat_model" not in create_analysis_input:
+    create_analysis_input["threat_model"] = ""
+if "selected_providers" not in create_analysis_input:
+    create_analysis_input["selected_providers"] = []
 if "isvalid_threat_model" not in st.session_state:
     st.session_state["isvalid_threat_model"] = "init"
 if "isvalid_analysis_details" not in st.session_state:
@@ -475,6 +448,7 @@ cloud_providers = [
 
 threat_models = ["Semi-Honest", "Malicious"]
 
+
 def threat_model_container() -> None:
     css_style = (
         "init"
@@ -494,8 +468,8 @@ def threat_model_container() -> None:
         )
 
         # Detect if the threat model has been changed
-        if new_threat_model != st.session_state.get("threat_model", ""):
-            st.session_state.threat_model = new_threat_model
+        if new_threat_model != create_analysis_input.get("threat_model", ""):
+            create_analysis_input["threat_model"] = new_threat_model
             st.session_state.threat_model_changed = True
         else:
             st.session_state.threat_model_changed = False
@@ -503,24 +477,37 @@ def threat_model_container() -> None:
         col2.markdown("##### Cloud Providers")
 
         if st.session_state.threat_model_changed:
-            if st.session_state.threat_model == "Semi-Honest":
-                st.session_state.selected_providers = random.sample(cloud_providers, 3)
+            if (
+                create_analysis_input["threat_model"]
+                == "Semi-Honest"
+            ):
+                create_analysis_input["selected_providers"] = (
+                    random.sample(cloud_providers, 3)
+                )
 
-            elif st.session_state.threat_model == "Malicious":
-                st.session_state.selected_providers = random.sample(cloud_providers, 4)
+            elif (
+                create_analysis_input["threat_model"] == "Malicious"
+            ):
+                create_analysis_input["selected_providers"] = (
+                    random.sample(cloud_providers, 4)
+                )
 
-        # Add or remove providers based on toggle state
-        for _, provider in enumerate(cloud_providers):
+        selected_providers: list[str] = create_analysis_input[
+            "selected_providers"
+        ]
+        for provider in cloud_providers:
             is_selected = col2.toggle(
                 provider,
                 key=f"toggle_{provider}",
-                value=provider in st.session_state.selected_providers,
+                value=provider in selected_providers,
             )
 
-            if is_selected and provider not in st.session_state.selected_providers:
-                st.session_state.selected_providers.append(provider)
-            elif not is_selected and provider in st.session_state.selected_providers:
-                st.session_state.selected_providers.remove(provider)
+            # Update selected_providers based on toggle state
+            if is_selected and provider not in selected_providers:
+                selected_providers.append(provider)
+            elif not is_selected and provider in selected_providers:
+                selected_providers.remove(provider)
+                
     if st.session_state.isvalid_threat_model == 2:
         st.error(
             "Error: In the Semi-Honest threat model, you must select at least 3 cloud providers."
@@ -532,7 +519,7 @@ def threat_model_container() -> None:
 
 
 threat_model_container()
-st.write(st.session_state.selected_providers)
+st.write(create_analysis_input["selected_providers"])
 st.divider()
 
 # *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*//
@@ -543,64 +530,135 @@ st.subheader("Analysis Details")
 
 type_mapping = {
     "String": "TEXT",
+    "Varchar": "TEXT",
     "Integer": "INT",
     "Float": "FLOAT",
     "Boolean": "BOOLEAN",
-    "Category": "TEXT",
+    "Category": "ENUM",
 }
+
+if "temp_enums" not in st.session_state:
+    st.session_state["temp_enums"] = []
 
 
 def create_table_sql() -> str:
-    table_name = st.session_state.table_name
-    columns = st.session_state.user_input.iloc[:, 0]
-    types = st.session_state.user_input.iloc[:, 2]
+    print("create_table_sql")
+    user_input = create_analysis_input["user_input"]
+    table_name = create_analysis_input["table_name"]
+    columns = user_input.iloc[:, 0]
+    types = user_input.iloc[:, 2]
+
+    sql_statements = []
 
     create_table_sql = f"CREATE TABLE {table_name} (\n"
 
     # Iterate through columns and types to create the column definitions
-    for column, data_type in zip(columns, types):
-        data_type = type_mapping[data_type]
-        create_table_sql += f"    {column} {data_type},\n"
+    for index, (column, data_type) in enumerate(zip(columns, types)):
+        # Check if the data type is ENUM
+        if data_type == "Category":
+            # Fetch the finite set for the ENUM from category_schema
+            enum_values = create_analysis_input["category_schema"][index]["Category"].dropna().tolist()
+
+            # Format the ENUM values for SQL (e.g., 'VALUE1', 'VALUE2', ...)
+            enum_str = ", ".join([f"'{value}'" for value in enum_values])
+
+            # Define the ENUM type in SQL
+            enum_type_name = f"{column}_enum"
+            enum_type_sql = f"CREATE TYPE {enum_type_name} AS ENUM ({enum_str});"
+            sql_statements.append(enum_type_sql)
+
+            # Use the ENUM type in the CREATE TABLE statement
+            create_table_sql += f"    {column} {enum_type_name},\n"
+        else:
+            print(f"|create_table_sql|: {data_type}")
+            # Map other data types as usual
+            data_type = type_mapping[data_type]
+            create_table_sql += f"    {column} {data_type},\n"
 
     create_table_sql = create_table_sql.rstrip(",\n") + "\n);"
-    return str(create_table_sql)
+    sql_statements.append(create_table_sql)
+
+    # Join all statements
+    full_sql = "\n".join(sql_statements)
+    return full_sql
+
+
+def find_enums():
+    user_input = create_analysis_input["user_input"]
+    columns = user_input.iloc[:, 0]
+    types = user_input.iloc[:, 2]
+    for column, data_type in zip(columns, types):
+        # Check if the data type is ENUM
+        if data_type == "Category":
+            # Fetch the finite set for the ENUM from category_schema
+            enum_values = create_analysis_input["category_schema"]
+            print(f"|find_enums|: enum_values:{enum_values}")
+
+            # Define the ENUM type in SQL
+            enum_type_name = f"{column}_enum"
+            st.session_state["temp_enums"].append(enum_type_name)
+
+
+def drop_enums_sql() -> str:
+    """generate sql for droping temporary enums for sql validation
+    Returns:
+        str: sql to drop temporary enums
+    """
+    sql = ""
+    if st.session_state["temp_enums"] != []:
+        for _, enum_name in enumerate(st.session_state["temp_enums"]):
+            sql += f"DROP TYPE IF EXISTS {enum_name};\n"
+    return sql
 
 
 def drop_table_sql() -> str:
-    table_name = st.session_state.table_name
+    """generate sql for droping temporary table for sql validation
+    Returns:
+        str: sql to drop temporary table
+    """
+    table_name = create_analysis_input['table_name']
     sql = f"DROP TABLE IF EXISTS {table_name};"
     return sql
 
 
 def validate_sql():
-    # conn = st.connection(
-    #     "verification",
-    #     type="sql",
-    #     autocommit=True,
-    #     username="user1",
-    #     password="Adam0511!",
-    #     host="localhost",
-    #     database="verification",
-    #     dialect="mysql",
-    # )
     engine = create_engine(
-        f"mysql+mysqlconnector://user1:Adam0511!@localhost/verification"
+        "postgresql+psycopg2://user1:12345678!@localhost:5432/shield_query"
     )
-    create_sql = create_table_sql()
-    query = st.session_state.query
-    drop_sql = drop_table_sql()
+    query = create_analysis_input["query"]
+    
+    find_enums()
     try:
+        
         with engine.connect() as conn:
-            # Execute the create table query
-            conn.execute(sqlalchemy.text(drop_sql))
-            conn.execute(sqlalchemy.text(create_sql))
+            print("drop_table_sql")
+            conn.execute(sqlalchemy.text(drop_table_sql()))
+            drop_enums_statement = drop_enums_sql()
+            if drop_enums_statement != "":  # Only execute if it's not empty
+                print(f"Executing drop_enums_sql: \'{drop_enums_statement}\'")
+                conn.execute(sqlalchemy.text(drop_enums_statement))
+            print("create_table_sql")
+            conn.execute(sqlalchemy.text(create_table_sql()))
+            print("query", )
             conn.execute(sqlalchemy.text(query))
-            conn.execute(sqlalchemy.text(drop_sql))
+            print("drop_table_sql")
+            conn.execute(sqlalchemy.text(drop_table_sql()))
+            print("drop_enums_sql")
+            if drop_enums_statement != "":
+                conn.execute(sqlalchemy.text(drop_enums_statement))
+            st.session_state["temp_enums"] = []
             return True
     except Exception as e:
         print(e)
         return False
 
+if "query_name" not in create_analysis_input:
+    create_analysis_input["query_name"] = ""
+if "query" not in create_analysis_input:
+    create_analysis_input["query"] = ""
+if "description" not in create_analysis_input:
+    create_analysis_input["description"] = ""
+    
 def analysis_details_container() -> None:
     if st.session_state.isvalid_analysis_details == "init":
         css_style = "init"
@@ -610,18 +668,10 @@ def analysis_details_container() -> None:
         key="analysis_details_model",
         css_styles=validation_css[css_style],
     ):
-        st.session_state.query_name = st.text_input("Query Name")
-
-        if "query_name" not in st.session_state:
-            st.session_state["query_name"] = ""
-
-        st.session_state.query = st.text_area("Input Query Here")
-        if "query" not in st.session_state:
-            st.session_state["query"] = ""
-
-        st.session_state.description = st.text_area("Description")
-        if "description" not in st.session_state:
-            st.session_state["description"] = ""
+        create_analysis_input["query_name"] = st.text_input("Query Name", create_analysis_input["query_name"])
+        create_analysis_input["query"] = st.text_area("Input Query Here", create_analysis_input["query"])
+        create_analysis_input["description"] = st.text_area("Description", create_analysis_input["description"])
+        
 
     if st.session_state.isvalid_analysis_details == 2:
         st.error("Error: No fields should be empty.")
@@ -632,9 +682,9 @@ def analysis_details_container() -> None:
 analysis_details_container()
 st.write(
     [
-        st.session_state["query_name"],
-        st.session_state["query"],
-        st.session_state["description"],
+        create_analysis_input["query_name"],
+        create_analysis_input["query"],
+        create_analysis_input["description"],
     ]
 )
 st.divider()
@@ -650,18 +700,18 @@ st.session_state.submitted = st.button("Submit")
 # *                       INPUT VALIDATION                     *//
 # *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*//
 def validate_threat_model() -> bool:
-    if st.session_state.threat_model == "Semi-Honest":
-        if len(st.session_state.selected_providers) >= 3:
+    if create_analysis_input["threat_model"] == "Semi-Honest":
+        if len(create_analysis_input['selected_providers']) >= 3:
             st.session_state.isvalid_threat_model = 1
             return True
-        elif len(st.session_state.selected_providers) < 3:
+        elif len(create_analysis_input['selected_providers']) < 3:
             st.session_state.isvalid_threat_model = 2
             return False
-    if st.session_state.threat_model == "Malicious":
-        if len(st.session_state.selected_providers) >= 4:
+    if create_analysis_input["threat_model"] == "Malicious":
+        if len(create_analysis_input['selected_providers']) >= 4:
             st.session_state.isvalid_threat_model = 1
             return True
-        elif len(st.session_state.selected_providers) < 4:
+        elif len(create_analysis_input['selected_providers']) < 4:
             st.session_state.isvalid_threat_model = 3
             return False
     return False
@@ -669,9 +719,9 @@ def validate_threat_model() -> bool:
 
 def validate_analysis_details() -> bool:
     if (
-        st.session_state["query_name"] == ""
-        or st.session_state["query"] == ""
-        or st.session_state["description"] == ""
+        create_analysis_input["query_name"] == ""
+        or create_analysis_input["query"] == ""
+        or create_analysis_input["description"] == ""
     ):
         st.session_state["isvalid_analysis_details"] = 2
         return False
@@ -693,15 +743,17 @@ if st.session_state.submitted:
         st.session_state["disabled"] = True
 
     disable()
-    st.session_state["query_name"] = st.session_state.query_name
-    st.session_state["description"] = st.session_state.description
-    st.session_state["query"] = st.session_state.query
-    st.session_state["threat model"] = st.session_state.threat_model
-    st.session_state["category schema"] = st.session_state.category_schema
-    st.session_state["user input"] = st.session_state.user_input
+    create_analysis_input["last_user_input"] = create_analysis_input["user_input"]
     st.session_state["Submit"] = st.session_state.submitted
 
     if validate_threat_model() and validate_analysis_details():
+        st.session_state.user_input_changed = 1
+        # st.write(st.session_state)
+        # print(create_analysis_input["user_input"])
+        # user_input_json = create_analysis_input["user_input"].to_json(
+        #     orient="records"
+        # )
+        # print(user_input_json)
         st.rerun()
     else:
         st.rerun()
@@ -711,9 +763,9 @@ if (
     and st.session_state["isvalid_analysis_details"] == 1
 ):
     st.success("Success")
-        
 
-st.write(st.session_state)
+
+
 
 if __name__ == "__main__":
     import streamlit.web.bootstrap

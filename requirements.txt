@@ -4,3 +4,5 @@ SQLAlchemy
 mysql-connector-python-9.0.0
 streamlit_js_eval
 loguru
+psycopg2
+psycopg2-binary
