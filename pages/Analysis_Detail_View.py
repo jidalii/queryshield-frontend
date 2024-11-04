@@ -10,6 +10,8 @@ from itertools import chain
 from multiprocessing.shared_memory import SharedMemory
 from typing import Any
 
+from sqlalchemy import create_engine
+import pytz
 
 from streamlit.components.v1 import html
 
@@ -17,18 +19,26 @@ from streamlit.web.server import Server
 from streamlit.web.server.server import start_listening
 from tornado.web import RequestHandler
 
-from utils.components.static_view import *
+from components.analysis_description_component import *
+from utils.db.db_services import fetch_single_analysis
 
 st.set_page_config("Analysis Detail View", layout="wide")
 
-# if not st.query_params["aid"]:
-#     st.error("Request ID should be provided.")
-# else:
-#     st.session_state["analysis_id_view"] = st.query_params.aid
-#     st.write("analysis id: ", st.session_state["analysis_id_view"])
+if "aid" not in st.query_params:
+    st.error("Request ID should be provided.")
+    st.stop()
+else:
+    st.session_state["analysis_id_view"] = st.query_params.aid
+    st.write("analysis id: ", st.session_state["analysis_id_view"])
 
 st.title("Analysis Detail View")
-st.sidebar.title("QueryShield")
+
+with st.sidebar:
+    st.empty()
+
+engine = create_engine(
+    "postgresql+psycopg2://user1:12345678!@localhost:5432/queryshield"
+)
 
 
 JS_TO_PD_COL_OFFSET: int = -2
@@ -224,28 +234,83 @@ console.log("Event listeners added!");
 
 schema_types = ["Integer", "Varchar", "String", "Float", "Category"]
 
+if "view_category_df" not in st.session_state:
+    st.session_state['view_category_df'] ={}
+
+if "cell_position" not in st.session_state:
+    st.session_state["cell_position"] = (0, 0)
+
+def convert_dict_to_df(data):
+    rows = []
+    for key, value in data.items():
+        # Note is units if available, otherwise categories if present
+        note = value.get("units") if value.get("units") else ''
+        rows.append({
+            "name": key,
+            "units": note,
+            "type": value.get("type")
+        })
+        
+    return pd.DataFrame(rows)
+
+def convert_dict_to_category_dict(data):
+    res = {}
+    i =0
+    for key, value in data.items():
+        t = value.get("type")
+        if t == 'Category':
+            res[i] = value.get("categories")
+        i+=1
+        
+    return res
+
+
+analysis = fetch_single_analysis(engine, st.query_params["aid"])
+# data = query_result['details']
+boston_tz = pytz.timezone('America/New_York')
+# Convert time_created to Boston timezone and format it
+# print(analysis)
+# print(analysis.keys())
+time_created = analysis['time_created'].astimezone(boston_tz).strftime('%Y:%m:%d %H:%M')
+
+# Create a dictionary with modified time_created
+analysis_details = {
+    'aid': analysis['aid'],
+    'analysis_name': analysis['analysis_name'],
+    'time_created': time_created,
+    'details': analysis['details'],
+    'status': analysis['status'],
+}
+data = analysis_details['details']
+raw_schema = data['schema']
+schema = convert_dict_to_df(raw_schema)
+category_df = convert_dict_to_category_dict(raw_schema)
+
 def schema_container():
-    create_analysis_input = st.session_state["create_analysis_input"]
+    # create_analysis_input = st.session_state["create_analysis_input"]
     col1, col2 = st.columns([0.7, 0.3])
-    data = create_analysis_input['user_input']
-    df = pd.DataFrame(data)
-    col1.dataframe(df, hide_index=True, use_container_width=True)
     
-    for index, entry in enumerate(create_analysis_input["last_user_input"]["type"]):
+
+    df = pd.DataFrame(schema)
+    col1.dataframe(df, hide_index=True, use_container_width=True)
+    for index, entry in enumerate(schema["type"]):
         if (entry == "Category" or entry not in schema_types) and index == st.session_state["cell_position"][0]:
             st.session_state.active_category = [True, index]
-            if index not in st.session_state.category_df:
+            if index not in category_df:
                 print("category_df not found")
-                st.session_state.category_df[index] = pd.DataFrame(columns=['Category'])
+                # st.session_state.category_df[index] = pd.DataFrame(columns=['Category'])
 
             height = 5 + 35 * index
             col2.html(
                 f"<p style='height: {height}px;'></p>"
             )
-            create_analysis_input['category_schema'][index] = col2.data_editor(
-                st.session_state.category_df[index],
+            
+            the_category_df = pd.DataFrame(category_df[index], columns=['Category'])
+            col2.data_editor(
+                the_category_df,
                 column_config={
                     "Category": st.column_config.TextColumn(),
+                    
                 },
                 hide_index=True,
                 disabled=True
@@ -254,15 +319,13 @@ def schema_container():
 
 schema_container()
 
-view_threat_model()
-view_analysis_details()
+view_threat_model(data)
+
+view_analysis_details(data)
 
 if "query_name" in st.session_state:
     st.subheader("Data Schema")
     if "user_input" in st.session_state:
-        # data = create_analysis_input['user_input']
-        # df = pd.DataFrame(data)
-        # st.dataframe(df, hide_index=True, use_container_width=True)
         schema_container()
         
         

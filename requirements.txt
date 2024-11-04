@@ -6,3 +6,5 @@ streamlit_js_eval
 loguru
 psycopg2
 psycopg2-binary
+streamlit-authenticator
+streamlit-cookies-manager

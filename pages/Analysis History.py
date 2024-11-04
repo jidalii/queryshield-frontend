@@ -1,8 +1,10 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import altair as alt
-from st_aggrid import AgGrid, GridOptionsBuilder, JsCode, GridUpdateMode
+from sqlalchemy import create_engine
+import pytz
+
+from components.analysis_history_component import analysis_history_component
+from utils.db.db_services import fetch_analyst_analysis_history
 
 st.set_page_config("QueryShield", layout="wide")
 
@@ -22,10 +24,9 @@ def email_form():
 if login:
     email_form()
 
-
-def hello(row):
-    st.write(f"Hello from row {row}")
-
+engine = create_engine(
+    "postgresql+psycopg2://user1:12345678!@localhost:5432/queryshield"
+)
 
 # def history_table():
 sample_data = {
@@ -45,64 +46,28 @@ sample_data = {
 
 projectlist = [["project1", "project2"], [1,2]]
 
-test_df = pd.DataFrame(sample_data)
+query_result = fetch_analyst_analysis_history(engine, 1)
+
+boston_tz = pytz.timezone('America/New_York')
+processed_result = []
+for analysis in query_result:
+    # Convert time_created to Boston timezone and format it
+    time_created = analysis['time_created'].astimezone(boston_tz).strftime('%Y:%m:%d %H:%M')
+
+    # Create a dictionary with modified time_created
+    processed_row = {
+        'aid': analysis['aid'],
+        'analysis_name': analysis['analysis_name'],
+        # 'analyst_name': analysis['analyst_name'],
+        # 'analyst_id': analysis['analyst_id'],
+        'time_created': time_created,  # modified time_created
+        'details': analysis['details'],
+        'owners_count': analysis['owners_count'],
+        'status': analysis['status'],
+    }
+    
+    processed_result.append(processed_row)
+test_df = pd.DataFrame(processed_result)
 # test_df = pd.DataFrame(projectlist, columns=["Projects", 'num'])
 
-# Build Grid Options for Ag-Grid
-gd = GridOptionsBuilder.from_dataframe(test_df)
-# gd.configure_pagination(enabled=True)
-gd.configure_selection(selection_mode="single")
-
-# Configure Action column with a URL renderer
-gd.configure_column(
-    "Status",
-    headerName="Status",
-    cellRenderer=JsCode(
-        """
-        class UrlCellRenderer {
-        init(params) {
-            this.eGui = document.createElement('a');
-            this.eGui.innerText = params.data["Status"];
-            this.eGui.setAttribute('href', '/Analysis_History?aid=' + params.data["Analysis ID"]);
-            this.eGui.setAttribute('style', "text-decoration:none");
-            this.eGui.setAttribute('target', "_blank");
-        }
-        getGui() {
-            return this.eGui;
-        }
-        }
-        """
-    ),
-)
-gd.configure_column(
-    "Analysis Description",
-    headerName="Analysis Description",
-    cellRenderer=JsCode(
-        """
-        class UrlCellRenderer {
-        init(params) {
-            this.eGui = document.createElement('a');
-            this.eGui.innerText = "View Details";
-            this.eGui.setAttribute('href', '/Analysis_Detail_View?aid=' + params.data["Analysis ID"]);
-            this.eGui.setAttribute('style', "text-decoration:none");
-            this.eGui.setAttribute('target', "_blank");
-        }
-        getGui() {
-            return this.eGui;
-        }
-        }
-        """
-    ),
-)
-
-gridoptions = gd.build()
-
-# Display the DataFrame in AgGrid within col1
-grid_table = AgGrid(
-    test_df,
-    gridOptions=gridoptions,
-    allow_unsafe_jscode=True,
-    height=500,
-    theme="streamlit",
-    update_mode=GridUpdateMode.SELECTION_CHANGED,
-)
+analysis_history_component(test_df)
