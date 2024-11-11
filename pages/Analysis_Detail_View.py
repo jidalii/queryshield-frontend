@@ -62,29 +62,6 @@ view_threat_model(data)
 
 view_analysis_details(data)
 
-if "query_name" in st.session_state:
-    st.subheader("Data Schema")
-    if "user_input" in st.session_state:
-        schema_table_component()
-        
-        
-    st.subheader("Threat Model")
-    st.markdown(f"- {st.session_state.threat_model}")
-    st.markdown("#### Cloud Provider:")
-    cloud_providers = ["Google Cloud", "Microsoft Azure", "Cloud 1"]
-    for provider in cloud_providers:
-        st.markdown("- " + provider)
-    st.subheader("Analysis Details")
-    if "query_name" in st.session_state:
-        st.markdown("#### Query Name:")
-        st.write(f"{st.session_state.query_name}")
-    if "query" in st.session_state:
-        st.markdown("#### Query:")
-        st.code(st.session_state.query)
-    if "description" in st.session_state:
-        st.markdown("#### Description:")
-        st.write(f"{st.session_state.description}")
-
 st.button("", key="fakeButton", on_click=fake_click, type="primary")
 st.markdown(
     """

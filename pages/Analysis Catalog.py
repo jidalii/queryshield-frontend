@@ -6,30 +6,22 @@ import pytz
 
 from components.analysis_catalog_component import analysis_catalog_component
 from utils.db.db_services import fetch_all_analysis_catalog
+from utils.share_data_validation import validate_share_data, validate_share_data_file
+from components.sidebar_login_component import sidebar_login_component,email_form, signup_form
 
 st.set_page_config("QueryShield", layout="wide")
 
 st.title("Analysis Catalog")
 st.sidebar.title("QueryShield")
-login = st.sidebar.button("Login")
 
 engine = create_engine(
     "postgresql+psycopg2://user1:12345678!@localhost:5432/queryshield"
 )
 
+if "logined" not in st.session_state:
+    st.session_state["logined"] = False
 
-@st.experimental_dialog("Login")
-def email_form():
-    with st.form("Login", border=True, clear_on_submit=True):
-        name = st.text_input("Name", key="key1")
-        email = st.text_input("Email", key="key2")
-        st.form_submit_button("Submit")
-
-
-if login:
-    email_form()
-
-st.session_state.user_input_changed
+sidebar_login_component(engine)
 
 # Convert the dictionary into a Pandas DataFrame
 query_result = fetch_all_analysis_catalog(engine)

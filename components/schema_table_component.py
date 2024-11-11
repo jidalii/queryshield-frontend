@@ -33,8 +33,6 @@ def schema_table_component(schema, schema_types, category_df):
             st.session_state.active_category = [True, index]
             if index not in category_df:
                 print("category_df not found")
-                # st.session_state.category_df[index] = pd.DataFrame(columns=['Category'])
-
             height = 5 + 35 * index
             col2.html(
                 f"<p style='height: {height}px;'></p>"
@@ -45,7 +43,6 @@ def schema_table_component(schema, schema_types, category_df):
                 the_category_df,
                 column_config={
                     "Category": st.column_config.TextColumn(),
-                    
                 },
                 hide_index=True,
                 disabled=True

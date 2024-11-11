@@ -12,7 +12,6 @@ from streamlit.components.v1 import html
 from streamlit.web.server import Server
 from streamlit.web.server.server import start_listening
 
-
 from dataclasses import dataclass
 from itertools import chain
 from multiprocessing.shared_memory import SharedMemory
@@ -29,13 +28,20 @@ from models.auth import UserRegistration, UserLogin
 from models.analysis import *
 from utils.db.schema_validation import *
 from utils.db.db_services import *
+from components.sidebar_login_component import sidebar_login_component,email_form, signup_form
 
 
+# create_page = st.Page("pages/data_owner/Analysis Catalog.py", title="Analysis Catalog", icon=":material/add_circle:")
+# pg = st.navigation([create_page])
 st.set_page_config(
     page_title="QueryShield",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+# pg.run()
+# delete_page = st.Page("delete.py", title="Delete entry", icon=":material/delete:")
+
+
 st.sidebar.title("QueryShield")
 
 engine = create_engine(
@@ -45,48 +51,7 @@ engine = create_engine(
 if "logined" not in st.session_state:
     st.session_state["logined"] = False
 
-
-@st.dialog("Login")
-def email_form():
-    with st.form("Login", border=False, clear_on_submit=True):
-        user = UserLogin()
-        user.email = st.text_input("Email", key="key1")
-        user.password = st.text_input("Password", key="key2")
-        if st.form_submit_button("Login"):
-            login_handler(engine, user)
-            st.rerun()
-
-
-@st.dialog("Signup")
-def signup_form():
-    with st.form("Signup", border=False, clear_on_submit=True):
-        newuser = UserRegistration()
-        newuser.first_name = st.text_input("First Name", key="key1")
-        newuser.last_name = st.text_input("Last Name", key="key2")
-        newuser.email = st.text_input("Email", key="key3")
-        newuser.password = st.text_input("Password", key="key4")
-        newuser.role = st.radio("Role", options=["data_owner", "analyst"])
-        if st.form_submit_button("Sign up"):
-            signup_handler(engine, newuser)
-
-
-if st.session_state["logined"]:
-    username = st.session_state["user"]["first_name"]
-    st.sidebar.write(f"Welcome, {username}!")
-    signout = st.sidebar.button("Signout")
-    if signout:
-        st.session_state["logined"] = False
-        st.session_state.pop("user")
-        st.success("Logged out successfully.")
-        st.rerun()
-else:
-    login = st.sidebar.button("Login")
-    signup = st.sidebar.button("Signup")
-    if login:
-        email_form()
-
-    if signup:
-        signup_form()
+sidebar_login_component(engine)
 
 if "disabled" not in st.session_state:
     st.session_state["disabled"] = False

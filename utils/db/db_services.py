@@ -124,3 +124,33 @@ def fetch_single_analysis(engine, aid):
             .filter(Analysis.aid == aid)
         )
         return query.first()
+    
+def register_data_owner(engine, aid, uid):
+    with engine.connect() as conn:
+        insert_sql = text(
+            """
+                INSERT INTO analysis_owners (analysis_id, user_id)
+                VALUES (:analysis_id, :user_id)
+            """
+        )
+        try:
+            conn.execute(
+                insert_sql,
+                {
+                    "analysis_id": aid,
+                    "user_id": uid,
+                },
+            )
+            return True, None
+        except Exception as e:
+            return False, e
+        
+def is_registered_owner(engine, aid, uid):
+    with Session(engine) as session:
+        query = (
+            session.query(AnalysisOwners)
+            .filter(AnalysisOwners.analysis_id == aid, AnalysisOwners.user_id == uid)
+            .first()
+        )
+        return query is not None
+    
