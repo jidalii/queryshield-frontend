@@ -6,11 +6,11 @@ from streamlit_cookies_manager import CookieManager
 from models.auth import UserRegistration, UserLogin
 
 
-def login_handler(engine, cookies: CookieManager, user: UserLogin):
+def login_handler(engine, user: UserLogin):
     login_query = text(
         """
-                        SELECT * FROM users WHERE email = :email
-                        """
+            SELECT * FROM users WHERE email = :email
+        """
     )
     with engine.connect() as conn:
         try:
@@ -25,9 +25,10 @@ def login_handler(engine, cookies: CookieManager, user: UserLogin):
                     st.session_state["logined"] = True
                     user_data.pop("pin")
                     print(user_data)
-                    cookies["uid"] = user_data.get("uid")
-                    cookies["first_name"] = user_data.get("first_name")
-                    cookies.save()
+                    # cookies["uid"] = user_data.get("uid")
+                    # cookies["first_name"] = user_data.get("first_name")
+                    # cookies.save()
+                    st.session_state['user'] = user_data
                     st.success("Login successful!")
                     st.rerun()
                 else:

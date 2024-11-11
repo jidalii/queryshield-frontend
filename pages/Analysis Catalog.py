@@ -32,11 +32,8 @@ if login:
 st.session_state.user_input_changed
 
 # Convert the dictionary into a Pandas DataFrame
-# test_df = pd.DataFrame(sample_data)
 query_result = fetch_all_analysis_catalog(engine)
 column_names = query_result[0].keys()
-# print(column_names)
-# query_result[0]
 boston_tz = pytz.timezone('America/New_York')
     
 processed_result = []

@@ -46,7 +46,7 @@ def analysis_catalog_component(df):
             init(params) {
                 this.eGui = document.createElement('a');
                 this.eGui.innerText = "Share Data";
-                this.eGui.setAttribute('href', '/Share_Data?request_id=' + params.data["Analysis Name"]);
+                this.eGui.setAttribute('href', '/Share_Data?aid=' + params.data["aid"]);
                 console.log(params);
                 this.eGui.setAttribute('style', "text-decoration:none");
                 this.eGui.setAttribute('target', "_blank");

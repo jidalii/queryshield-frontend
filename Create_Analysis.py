@@ -38,14 +38,6 @@ st.set_page_config(
 )
 st.sidebar.title("QueryShield")
 
-
-# cookies = EncryptedCookieManager(
-#     prefix="queryshield/streamlit-cookies-manager/",
-#     password="88888888",
-# )
-# if not cookies.ready():
-#     st.stop()
-
 engine = create_engine(
     "postgresql+psycopg2://user1:12345678!@localhost:5432/queryshield"
 )
@@ -61,7 +53,7 @@ def email_form():
         user.email = st.text_input("Email", key="key1")
         user.password = st.text_input("Password", key="key2")
         if st.form_submit_button("Login"):
-            login_handler(engine, cookies, user)
+            login_handler(engine, user)
             st.rerun()
 
 
@@ -78,23 +70,23 @@ def signup_form():
             signup_handler(engine, newuser)
 
 
-# if st.session_state["logined"]:
-#     username = cookies.get("first_name", "User")
-#     st.sidebar.write(f"Welcome, {username}!")
-#     signout = st.sidebar.button("Signout")
-#     if signout:
-#         st.session_state["logined"] = False
-#         cookies.delete("user")
-#         st.success("Logged out successfully.")
-#         st.rerun()
-# else:
-#     login = st.sidebar.button("Login")
-#     signup = st.sidebar.button("Signup")
-#     if login:
-#         email_form()
+if st.session_state["logined"]:
+    username = st.session_state["user"]["first_name"]
+    st.sidebar.write(f"Welcome, {username}!")
+    signout = st.sidebar.button("Signout")
+    if signout:
+        st.session_state["logined"] = False
+        st.session_state.pop("user")
+        st.success("Logged out successfully.")
+        st.rerun()
+else:
+    login = st.sidebar.button("Login")
+    signup = st.sidebar.button("Signup")
+    if login:
+        email_form()
 
-#     if signup:
-#         signup_form()
+    if signup:
+        signup_form()
 
 if "disabled" not in st.session_state:
     st.session_state["disabled"] = False
@@ -109,6 +101,9 @@ def submit_btn():
 
 
 st.title("Create New Analysis")
+if "user" in st.session_state:
+    _user = st.session_state['user']
+    st.write(f"User: {_user}")
 
 _JS_TO_PD_COL_OFFSET: int = -2
 
@@ -261,7 +256,6 @@ if "schema_types" not in st.session_state:
 if "user_input_changed" not in st.session_state:
     st.session_state.user_input_changed = 0
 st.write(st.session_state.user_input_changed)
-# st.write(cookies)
 
 df = pd.DataFrame(columns=["name", "units", "type"])
 if "last_user_input" in create_analysis_input and (
@@ -409,7 +403,6 @@ def schema_container():
             st.session_state.category_df[index] = create_analysis_input[
                 "category_schema"
             ][index].reset_index(drop=True)
-
 
 schema_container()
 
@@ -649,7 +642,6 @@ def validate_threat_model() -> bool:
             st.session_state.isvalid_threat_model = 3
             return False
     return False
-
 
 def validate_analysis_details() -> bool:
     if (
