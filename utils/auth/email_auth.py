@@ -25,12 +25,8 @@ def login_handler(engine, user: UserLogin):
                     st.session_state["logined"] = True
                     user_data.pop("pin")
                     print(user_data)
-                    # cookies["uid"] = user_data.get("uid")
-                    # cookies["first_name"] = user_data.get("first_name")
-                    # cookies.save()
                     st.session_state['user'] = user_data
                     st.success("Login successful!")
-                    st.rerun()
                 else:
                     st.error("Incorrect password")
         except Exception as e:

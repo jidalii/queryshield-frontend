@@ -21,23 +21,19 @@ from sqlalchemy import create_engine
 
 from tornado.web import RequestHandler
 
-from streamlit_cookies_manager import CookieManager, EncryptedCookieManager
-
-from utils.auth.email_auth import login_handler, signup_handler
-from models.auth import UserRegistration, UserLogin
 from models.analysis import *
 from utils.db.schema_validation import *
 from utils.db.db_services import *
-from components.sidebar_login_component import sidebar_login_component,email_form, signup_form
+from components.sidebar_component import sidebar_login_component
 
 
 # create_page = st.Page("pages/data_owner/Analysis Catalog.py", title="Analysis Catalog", icon=":material/add_circle:")
 # pg = st.navigation([create_page])
-st.set_page_config(
-    page_title="QueryShield",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+# st.set_page_config(
+#     page_title="QueryShield",
+#     layout="wide",
+#     initial_sidebar_state="expanded",
+# )
 # pg.run()
 # delete_page = st.Page("delete.py", title="Delete entry", icon=":material/delete:")
 
@@ -48,10 +44,10 @@ engine = create_engine(
     "postgresql+psycopg2://user1:12345678!@localhost:5432/queryshield"
 )
 
-if "logined" not in st.session_state:
-    st.session_state["logined"] = False
+# if "logined" not in st.session_state:
+#     st.session_state["logined"] = False
 
-sidebar_login_component(engine)
+# sidebar_login_component(engine)
 
 if "disabled" not in st.session_state:
     st.session_state["disabled"] = False
@@ -656,10 +652,6 @@ def data2json():
 
     return json.dumps(result_dict)
 
-
-# st.write(data2json())
-
-
 if st.session_state.submitted:
     if "disabled" not in st.session_state:
         st.session_state["disabled"] = False
@@ -694,23 +686,23 @@ if (
         st.error(f"DB error: {e}")
 
 
-if __name__ == "__main__":
-    import streamlit.web.bootstrap
+# if __name__ == "__main__":
+#     import streamlit.web.bootstrap
 
-    if "__streamlitmagic__" not in locals():
-        # Code adapted from bootstrap.py in streamlit
-        streamlit.web.bootstrap._fix_sys_path(__file__)
-        streamlit.web.bootstrap._fix_tornado_crash()
-        streamlit.web.bootstrap._fix_sys_argv(__file__, [])
-        streamlit.web.bootstrap._fix_pydeck_mapbox_api_warning()
-        # streamlit.web.bootstrap._fix_pydantic_duplicate_validators_error()
+#     if "__streamlitmagic__" not in locals():
+#         # Code adapted from bootstrap.py in streamlit
+#         streamlit.web.bootstrap._fix_sys_path(__file__)
+#         streamlit.web.bootstrap._fix_tornado_crash()
+#         streamlit.web.bootstrap._fix_sys_argv(__file__, [])
+#         streamlit.web.bootstrap._fix_pydeck_mapbox_api_warning()
+#         # streamlit.web.bootstrap._fix_pydantic_duplicate_validators_error()
 
-        server = CustomServer(__file__, is_hello=False)
+#         server = CustomServer(__file__, is_hello=False)
 
-        async def run_server():
-            await server.start()
-            streamlit.web.bootstrap._on_server_start(server)
-            streamlit.web.bootstrap._set_up_signal_handler(server)
-            await server.stopped
+#         async def run_server():
+#             await server.start()
+#             streamlit.web.bootstrap._on_server_start(server)
+#             streamlit.web.bootstrap._set_up_signal_handler(server)
+#             await server.stopped
 
-        asyncio.run(run_server())
+#         asyncio.run(run_server())
