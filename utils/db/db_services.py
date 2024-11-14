@@ -130,7 +130,7 @@ def register_data_owner(engine, aid, uid):
         insert_sql = text(
             """
                 INSERT INTO analysis_owners (analysis_id, user_id)
-                VALUES (:analysis_id, :user_id)
+                VALUES (:analysis_id, :user_id);
             """
         )
         try:

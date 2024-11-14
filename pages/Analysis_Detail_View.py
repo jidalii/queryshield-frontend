@@ -58,9 +58,9 @@ category_df = convert_dict_to_category_dict(raw_schema)
 
 schema_table_component(schema, schema_types, category_df)
 
-view_threat_model(data)
+view_threat_model_component(data)
 
-view_analysis_details(data)
+view_analysis_details_component(data)
 
 st.button("", key="fakeButton", on_click=fake_click, type="primary")
 st.markdown(

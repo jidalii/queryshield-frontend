@@ -1,138 +1,123 @@
+# Imports
 import streamlit as st
 import pandas as pd
-from sqlalchemy import create_engine
 import pytz
-from streamlit.components.v1 import html
-
-from components.schema_table_component import schema_table_component
+from sqlalchemy import create_engine
+from components.share_data_editor_component import share_data_editor_component
 from components.sidebar_login_component import sidebar_login_component
 from configs.configs import schema_types
 from configs.html import html_contents
-from utils.row_detection import fake_click
-from utils.helpers import convert_dict_to_df, convert_dict_to_category_dict, fetch_name_and_type_tuple
-from utils.db.db_services import fetch_single_analysis, register_data_owner,is_registered_owner
-from utils.share_data_validation import validate_share_data, validate_share_data_file 
+from utils.row_detection import *
+from utils.helpers import (
+    convert_dict_to_df,
+    convert_dict_to_category_dict,
+    fetch_name_and_type_tuple,
+)
+from utils.db.db_services import (
+    fetch_single_analysis,
+    register_data_owner,
+    is_registered_owner,
+)
+from utils.share_data_validation import validate_share_data_file
 
-st.set_page_config(
-    page_title='QueryShield',
-    layout="wide",
-    initial_sidebar_state="expanded",)
+# Constants
+DATABASE_URL = "postgresql+psycopg2://user1:12345678!@localhost:5432/queryshield"
+TIMEZONE = pytz.timezone("America/New_York")
 
+# Streamlit Page Configuration
+st.set_page_config(page_title="QueryShield", layout="wide", initial_sidebar_state="expanded")
 st.title("Share Data")
-
 st.sidebar.title("QueryShield")
 
-if "logined" not in st.session_state:
-    st.session_state["logined"] = False
-
-st.subheader('Data Schema')
-
-engine = create_engine(
-    "postgresql+psycopg2://user1:12345678!@localhost:5432/queryshield"
-)
+# Database Engine Initialization
+engine = create_engine(DATABASE_URL)
 sidebar_login_component(engine)
 
-if "view_category_df" not in st.session_state:
-    st.session_state['view_category_df'] ={}
+# Session State Initialization
+def initialize_session_state():
+    if "view_category_df" not in st.session_state:
+        st.session_state["view_category_df"] = {}
+    if "cell_position" not in st.session_state:
+        st.session_state["cell_position"] = (0, 0)
+    if "data_to_share" not in st.session_state:
+        st.session_state["data_to_share"] = pd.DataFrame(columns=names)
 
-if "cell_position" not in st.session_state:
-    st.session_state["cell_position"] = (0, 0)
+# Fetch and Format Analysis Data
+def fetch_analysis_data():
+    analysis = fetch_single_analysis(engine, st.query_params["aid"])
+    time_created = analysis["time_created"].astimezone(TIMEZONE).strftime("%Y:%m:%d %H:%M")
+    return {
+        "aid": analysis["aid"],
+        "analysis_name": analysis["analysis_name"],
+        "time_created": time_created,
+        "details": analysis["details"],
+        "status": analysis["status"],
+    }
 
-analysis = fetch_single_analysis(engine, st.query_params["aid"])
-boston_tz = pytz.timezone('America/New_York')
-time_created = analysis['time_created'].astimezone(boston_tz).strftime('%Y:%m:%d %H:%M')
-
-analysis_details = {
-    'aid': analysis['aid'],
-    'analysis_name': analysis['analysis_name'],
-    'time_created': time_created,
-    'details': analysis['details'],
-    'status': analysis['status'],
-}
-data = analysis_details['details']
-raw_schema = data['schema']
+analysis_details = fetch_analysis_data()
+raw_schema = analysis_details["details"]["schema"]
 schema = convert_dict_to_df(raw_schema)
 category_dict = convert_dict_to_category_dict(raw_schema)
+names, dtypes = fetch_name_and_type_tuple(raw_schema)
+table_headers = [f"{name} ({dtype})" for name, dtype in zip(names, dtypes)]
 
-schema_table_component(schema, schema_types, category_dict)
-st.button("", key="fakeButton", on_click=fake_click, type="primary")
-st.markdown(
-    """
-    <style>
-    div[data-testid="stTextInput"][data-st-key="CELL_ID"] {
-        visibility: hidden;
-    }
-    button[kind="primary"] {
-        visibility: hidden;
-    }
-    button {
-        height: 0px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-html(html_contents)
 
-st.divider()
-names, types = fetch_name_and_type_tuple(raw_schema)
+initialize_session_state()
 
-to_share_df = pd.DataFrame(columns=names)
+# File Upload
+st.markdown("<h3 style='text-align: center; color:black;'>Upload as CSV or Enter Data Here</h3>", unsafe_allow_html=True)
+uploaded_file = st.file_uploader("", label_visibility="collapsed", type="csv")
+if uploaded_file is not None:
+    st.session_state["data_to_share"] = pd.read_csv(uploaded_file)
+    print("file uploaded")
 
-if "data_to_share" not in st.session_state:
-    st.session_state["data_to_share"] = pd.DataFrame(columns=names)
-    
-if "data_to_share_file" not in st.session_state:
-    st.session_state["data_to_share_file"] = pd.DataFrame(columns=names)
-    
-column_config = {}
-for i, (name, type_) in enumerate(zip(names, types)):
-    if type_ == 'Category':
-        column_config[name] = st.column_config.SelectboxColumn(
-                name,
-                options=category_dict[i],
-                default=category_dict[i][0],
+# Column Configuration for Data Editor
+def construct_column_config_share_data(df, table_headers, names, dtypes, category_dict):
+    column_config = {}
+    for i, (header, name, dtype) in enumerate(zip(table_headers, names, dtypes)):
+        if dtype == "Category":
+            if name in df:
+                df[name] = df[name].astype(str)
+            column_config[name] = st.column_config.SelectboxColumn(
+                label=header,
+                options=[str(option) for option in category_dict[i]],
+                default=str(category_dict[i][0]),
             )
-    else:
-        column_config[name] = st.column_config.TextColumn(name)
-        
-st.markdown("<h3 style='text-align: center; color: black;'>Enter Data Here </h3>", unsafe_allow_html=True)
+        elif dtype in ["Integer", "Float"]:
+            column_config[name] = st.column_config.NumberColumn(label=header)
+        else:
+            column_config[name] = st.column_config.TextColumn(label=header)
+    return column_config
+
+column_config = construct_column_config_share_data(
+    st.session_state["data_to_share"], table_headers, names, dtypes, category_dict
+)
+
+# Data Editor
 st.session_state["data_to_share"] = st.data_editor(
-    to_share_df,
+    st.session_state["data_to_share"],
     column_config=column_config,
     num_rows="dynamic",
     hide_index=True,
     use_container_width=True,
 )
 
-st.session_state["data_to_share"]
-
-st.markdown("<h3 style='text-align: center; color:black;'>or Upload as CSV </h3>", unsafe_allow_html=True)
-
-uploaded_file = st.file_uploader("", label_visibility="collapsed", type='csv')
-if uploaded_file is not None:
-    st.session_state['data_to_share_file'] = pd.read_csv(uploaded_file)
-    
-st.write(st.session_state['data_to_share_file'])
-
-submitted= st.button("Secret Share Data")
-if submitted:
-    is_valid, err = validate_share_data(st.session_state["data_to_share"], types)
-    is_valid, err = validate_share_data_file(st.session_state['data_to_share_file'], names, types)
+# Data Submission
+def handle_submission():
+    is_valid, err = validate_share_data_file(st.session_state["data_to_share"], names, dtypes)
     if is_valid:
         aid = st.query_params["aid"]
         uid = st.query_params["uid"]
-        is_registered = is_registered_owner(engine, aid, uid)
-        if is_registered:
-            err = f"Already registered for analysis id {aid}"
-            st.error(err)
+        if is_registered_owner(engine, aid, uid):
+            st.error("Error: you have already registered for this analysis")
         else:
-            succss, err = register_data_owner(engine, aid, uid)
-            if succss:
+            success, err = register_data_owner(engine, aid, uid)
+            if success:
                 st.success("Success")
             else:
-                res = f"Error: {err}"
-                st.error(res)
+                st.error(f"Error: {err}")
     else:
-        res = f"Error: {err}"
-        st.error(res)
+        st.error(f"Error: {err}")
+
+if st.button("Secret Share Data"):
+    handle_submission()

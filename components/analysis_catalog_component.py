@@ -57,6 +57,7 @@ def analysis_catalog_component(df):
             }
             """
         ),
+        # this.eGui.setAttribute('target', "_self"); 
         width=300,
     )
 

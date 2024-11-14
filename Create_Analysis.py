@@ -220,7 +220,7 @@ if "schema_types" not in st.session_state:
 
 if "user_input_changed" not in st.session_state:
     st.session_state.user_input_changed = 0
-st.write(st.session_state.user_input_changed)
+# st.write(st.session_state.user_input_changed)
 
 df = pd.DataFrame(columns=["name", "units", "type"])
 if "last_user_input" in create_analysis_input and (

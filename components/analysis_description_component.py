@@ -1,7 +1,7 @@
 import streamlit as st
 
 
-def view_threat_model(data):
+def view_threat_model_component(data):
     st.subheader("Threat Model")
     thread_model = data["threat_model"]
     st.markdown(f"- {thread_model}")
@@ -11,7 +11,7 @@ def view_threat_model(data):
         st.markdown("- " + provider)
     
         
-def view_analysis_details(data):
+def view_analysis_details_component(data):
     st.subheader("Analysis Details")
     if "query_name" in data:
         st.markdown("#### Query Name:")
