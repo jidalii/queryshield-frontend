@@ -1,5 +1,5 @@
 
-html_contents = """
+HTML_CONTENTS = """
 <script defer>
 const fakeButton = window.parent.document.querySelector("[data-testid^='stBaseButton-primary']");
 const tbl = window.parent.document.querySelector("[data-testid^='stDataFrameResizable']");
@@ -76,3 +76,28 @@ tbl.addEventListener('click', handleTableClick)
 console.log("Event listeners added!");
 </script>
 """
+
+
+VALIDATION_CSS = {
+    "init": """
+        {
+            background-color: #FFFFFF;
+            border-radius: 10px;
+            padding: 15px;
+        }
+        """,
+    True: """
+            {
+                background-color: #d7f8d8;
+                border-radius: 10px;
+                padding: 15px;
+            }
+            """,
+    False: """
+            {
+                background-color: #f8d7da;
+                border-radius: 10px;
+                padding: 15px;
+            }
+            """,
+}

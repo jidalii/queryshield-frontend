@@ -1,7 +1,5 @@
 import asyncio
 import json
-import os
-import threading
 import random
 
 import streamlit as st
@@ -9,38 +7,29 @@ import pandas as pd
 
 from streamlit_extras.stylable_container import stylable_container
 from streamlit.components.v1 import html
-from streamlit.web.server import Server
-from streamlit.web.server.server import start_listening
 
-from dataclasses import dataclass
-from itertools import chain
 from multiprocessing.shared_memory import SharedMemory
-from typing import Any
 
 from sqlalchemy import create_engine
-
-from tornado.web import RequestHandler
-
-from streamlit_cookies_manager import CookieManager, EncryptedCookieManager
 
 from utils.auth.email_auth import login_handler, signup_handler
 from models.auth import UserRegistration, UserLogin
 from models.analysis import *
+from components.create_analysis.threat_model_component import threat_model_component, analysis_details_component
 from utils.db.schema_validation import *
 from utils.db.db_services import *
-from components.sidebar_login_component import sidebar_login_component,email_form, signup_form
+from utils.row_detection import *
+from configs.configs import SCHEMA_TYPES, CLOUD_PROVIDERS, THREAT_MODELS, TYPE_MAPPING
+from configs.html import VALIDATION_CSS, HTML_CONTENTS
+from components.sidebar_login_component import (
+    sidebar_login_component,
+)
 
-
-# create_page = st.Page("pages/data_owner/Analysis Catalog.py", title="Analysis Catalog", icon=":material/add_circle:")
-# pg = st.navigation([create_page])
 st.set_page_config(
     page_title="QueryShield",
     layout="wide",
     initial_sidebar_state="expanded",
 )
-# pg.run()
-# delete_page = st.Page("delete.py", title="Delete entry", icon=":material/delete:")
-
 
 st.sidebar.title("QueryShield")
 
@@ -67,7 +56,7 @@ def submit_btn():
 
 st.title("Create New Analysis")
 if "user" in st.session_state:
-    _user = st.session_state['user']
+    _user = st.session_state["user"]
     st.write(f"User: {_user}")
 
 _JS_TO_PD_COL_OFFSET: int = -2
@@ -78,116 +67,11 @@ try:
 except FileExistsError:
     payload_memory = SharedMemory(name="JS_PAYLOAD", create=False, size=128)
 
-
-@dataclass
-class Selection:
-    """Dataclass to store the selected cell information."""
-
-    col: int
-    row: int
-    sorted_by: int
-
-
-def sort_df_by_selected_col(table: pd.DataFrame, js_sorted_by: int) -> pd.DataFrame:
-    if js_sorted_by == 1:
-        return table
-    elif js_sorted_by == -1:
-        return table.sort_index(axis=0, ascending=False)
-    sorting_col: str = table.columns[abs(js_sorted_by) + _JS_TO_PD_COL_OFFSET]
-    return table.sort_values(by=sorting_col, ascending=js_sorted_by > 0)
-
-
-def _retrieve_payload() -> Selection:
-    """Retrieve the payload from the shared memory and return it as a tuple."""
-    payload = {}
-    if payload_memory.buf[0] != 0:
-        payload_bytes = bytearray(payload_memory.buf[:])
-        payload_str = payload_bytes.decode("utf-8").rstrip("\x00")
-        payload_length, payload = len(payload_str), json.loads(payload_str)
-        payload_memory.buf[:payload_length] = bytearray(payload_length)
-    if payload:
-        selected_cell_info = Selection(
-            *(
-                int(val)
-                for val in chain(
-                    payload.get("cellId").split(","), [payload.get("sortedByCol")]
-                )
-            )
-        )
-        print(
-            f"{os.getpid()}::{threading.get_ident()}: Streamlit callback received payload: {selected_cell_info}"
-        )
-        return Selection(
-            selected_cell_info.col - 1,
-            selected_cell_info.row,
-            selected_cell_info.sorted_by,
-        )
-    else:
-        print(
-            f"{os.getpid()}::{threading.get_ident()}: Streamlit callback saw no payload"
-        )
-        return Selection(-1, -1, -1)
-
-
-def _interpret_payload(payload: Selection) -> tuple[Any, Any]:
-    """Interpret the payload and return the selected row and column."""
-    # sorted_df = sort_df_by_selected_col(df, payload.sorted_by)
-    selected_row = payload.row if payload.row >= 0 else -1
-    selected_col = payload.col if payload.col >= 0 else -1
-
-    return selected_row, selected_col
-
-
-def fake_click(*args, **kwargs):
-    parsed_payload: Selection = _retrieve_payload()
-    selected_row, selected_col = _interpret_payload(parsed_payload)
-    if selected_col != -1 or selected_row != -1:
-        st.session_state["cell_position"] = selected_row, selected_col
-
-
-class JSCallbackHandler(RequestHandler):
-    def set_default_headers(self):
-        # We hijack this method to store the JS payload
-        try:
-            payload: bytes = self.request.body
-            print(
-                f"{os.getpid()}::{threading.get_ident()}: Python received payload: {json.loads(payload)}"
-            )
-        except json.JSONDecodeError:
-            raise ValueError("Invalid JSON payload!")
-
-        if payload_memory.buf[0] == 0:
-            payload_memory.buf[: len(payload)] = payload
-            print(
-                f"{os.getpid()}::{threading.get_ident()}: Payload {payload} stored in shared memory"
-            )
-
-
-class CustomServer(Server):
-    async def start(self):
-        # Override the start of the Tornado server, so we can add custom handlers
-        app = self._create_app()
-
-        # Add a new handler
-        app.default_router.add_rules(
-            [
-                (r"/js_callback", JSCallbackHandler),
-            ]
-        )
-
-        # Our new rules go before the rule matching everything, reverse the list
-        app.default_router.rules = list(reversed(app.default_router.rules))
-
-        start_listening(app)
-        await self._runtime.start()
-
-
 # *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*//
 # *                          DATA SCHEMA                       *//
 # *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*//
 
 st.subheader("Data Schema")
-# with st.form("Submit", border=False, clear_on_submit=False):
 if "table_name" not in st.session_state:
     st.session_state["table_name"] = ""
 if "cell_position" not in st.session_state:
@@ -210,17 +94,12 @@ if "user_input" not in create_analysis_input:
     create_analysis_input["user_input"] = pd.DataFrame()
 if "previous_df" not in st.session_state:
     st.session_state.previous_df = pd.DataFrame([])
-
-
 if "category_schema" not in create_analysis_input:
     create_analysis_input["category_schema"] = {}
-
 if "schema_types" not in st.session_state:
     st.session_state.schema_types = []
-
 if "user_input_changed" not in st.session_state:
     st.session_state.user_input_changed = 0
-# st.write(st.session_state.user_input_changed)
 
 df = pd.DataFrame(columns=["name", "units", "type"])
 if "last_user_input" in create_analysis_input and (
@@ -228,7 +107,6 @@ if "last_user_input" in create_analysis_input and (
     or st.session_state["user_input_changed"] == 1
 ):
     df = create_analysis_input["last_user_input"].reset_index(drop=True)
-schema_types = ["Integer", "Varchar", "String", "Float", "Category"]
 
 html_contents = """
 <script defer>
@@ -315,7 +193,7 @@ def schema_container():
     conlumn_config = {
         "type": st.column_config.SelectboxColumn(
             "Type",
-            options=schema_types,
+            options=SCHEMA_TYPES,
             default="Integer",
         ),
         "name": st.column_config.TextColumn("Column Name"),
@@ -345,7 +223,7 @@ def schema_container():
 
     for index, entry in enumerate(create_analysis_input["user_input"]["type"]):
         if (
-            entry == "Category" or entry not in schema_types
+            entry == "Category" or entry not in SCHEMA_TYPES
         ) and index == st.session_state["cell_position"][0]:
             st.session_state.active_category = [True, index]
             if index not in st.session_state.category_df:
@@ -386,42 +264,16 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-html(html_contents)
+html(HTML_CONTENTS)
 
 st.write(f"position: {st.session_state.cell_position}")
 st.write(create_analysis_input)
 st.write(create_analysis_input["category_schema"])
 st.write(st.session_state.schema_types)
 
-
 column_name = create_analysis_input["user_input"].get("Column Name", "")
 
-
 st.divider()
-
-validation_css = {
-    "init": """
-        {
-            background-color: #FFFFFF;
-            border-radius: 10px;
-            padding: 15px;
-        }
-        """,
-    True: """
-            {
-                background-color: #d7f8d8;
-                border-radius: 10px;
-                padding: 15px;
-            }
-            """,
-    False: """
-            {
-                background-color: #f8d7da;
-                border-radius: 10px;
-                padding: 15px;
-            }
-            """,
-}
 
 # *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*//
 # *                          THREAT MODEL                      *//
@@ -441,82 +293,8 @@ if "isvalid_sql" not in st.session_state:
 
 st.subheader("Threat Model")
 
-cloud_providers = [
-    "AWS",
-    "Microsoft Azure",
-    "Google Cloud",
-    "Chameleon Open Cloud",
-    "Cloud 1",
-    "Cloud 2",
-]
-
-threat_models = ["Semi-Honest", "Malicious"]
-
-
-def threat_model_container() -> None:
-    css_style = (
-        "init"
-        if st.session_state.isvalid_threat_model == "init"
-        else st.session_state.isvalid_threat_model == 1
-    )
-    with stylable_container(
-        key="thread_model",
-        css_styles=validation_css[css_style],
-    ):
-        col1, col2 = st.columns(2)
-        new_threat_model = col1.radio(
-            "Threat Model",
-            options=threat_models,
-            label_visibility="collapsed",
-            key="t1",
-        )
-
-        # Detect if the threat model has been changed
-        if new_threat_model != create_analysis_input.get("threat_model", ""):
-            create_analysis_input["threat_model"] = new_threat_model
-            st.session_state.threat_model_changed = True
-        else:
-            st.session_state.threat_model_changed = False
-
-        col2.markdown("##### Cloud Providers")
-
-        if st.session_state.threat_model_changed:
-            if create_analysis_input["threat_model"] == "Semi-Honest":
-                create_analysis_input["selected_providers"] = random.sample(
-                    cloud_providers, 3
-                )
-
-            elif create_analysis_input["threat_model"] == "Malicious":
-                create_analysis_input["selected_providers"] = random.sample(
-                    cloud_providers, 4
-                )
-
-        selected_providers: list[str] = create_analysis_input["selected_providers"]
-        for provider in cloud_providers:
-            is_selected = col2.toggle(
-                provider,
-                key=f"toggle_{provider}",
-                value=provider in selected_providers,
-            )
-
-            # Update selected_providers based on toggle state
-            if is_selected and provider not in selected_providers:
-                selected_providers.append(provider)
-            elif not is_selected and provider in selected_providers:
-                selected_providers.remove(provider)
-
-    if st.session_state.isvalid_threat_model == 2:
-        st.error(
-            "Error: In the Semi-Honest threat model, you must select at least 3 cloud providers."
-        )
-    elif st.session_state.isvalid_threat_model == 3:
-        st.error(
-            "Error: In the Malicious threat model, you must select at least 4 cloud providers."
-        )
-
-
-threat_model_container()
-st.write(create_analysis_input["selected_providers"])
+threat_model_component()
+# st.write(create_analysis_input["selected_providers"])
 st.divider()
 
 # *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*//
@@ -525,19 +303,6 @@ st.divider()
 
 st.subheader("Analysis Details")
 
-type_mapping = {
-    "String": "TEXT",
-    "Varchar": "TEXT",
-    "Integer": "INT",
-    "Float": "FLOAT",
-    "Boolean": "BOOLEAN",
-    "Category": "ENUM",
-}
-
-if "temp_enums" not in st.session_state:
-    st.session_state["temp_enums"] = []
-
-
 if "query_name" not in create_analysis_input:
     create_analysis_input["query_name"] = ""
 if "query" not in create_analysis_input:
@@ -545,40 +310,14 @@ if "query" not in create_analysis_input:
 if "description" not in create_analysis_input:
     create_analysis_input["description"] = ""
 
-
-def analysis_details_container() -> None:
-    if st.session_state.isvalid_analysis_details == "init":
-        css_style = "init"
-    else:
-        css_style = st.session_state.isvalid_analysis_details == 1
-    with stylable_container(
-        key="analysis_details_model",
-        css_styles=validation_css[css_style],
-    ):
-        create_analysis_input["query_name"] = st.text_input(
-            "Query Name", create_analysis_input["query_name"]
-        )
-        create_analysis_input["query"] = st.text_area(
-            "Input Query Here", create_analysis_input["query"]
-        )
-        create_analysis_input["description"] = st.text_area(
-            "Description", create_analysis_input["description"]
-        )
-
-    if st.session_state.isvalid_analysis_details == 2:
-        st.error("Error: No fields should be empty.")
-    elif st.session_state.isvalid_analysis_details == 3:
-        st.error("Error: Invalid SQL query.")
-
-
-analysis_details_container()
-st.write(
-    [
-        create_analysis_input["query_name"],
-        create_analysis_input["query"],
-        create_analysis_input["description"],
-    ]
-)
+analysis_details_component()
+# st.write(
+#     [
+#         create_analysis_input["query_name"],
+#         create_analysis_input["query"],
+#         create_analysis_input["description"],
+#     ]
+# )
 st.divider()
 
 if "Submit" not in st.session_state:
@@ -593,20 +332,21 @@ st.session_state.submitted = st.button("Submit")
 # *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*//
 def validate_threat_model() -> bool:
     if create_analysis_input["threat_model"] == "Semi-Honest":
-        if len(create_analysis_input["selected_providers"]) >= 3:
+        if len(create_analysis_input["selected_providers"]) == 3:
             st.session_state.isvalid_threat_model = 1
             return True
-        elif len(create_analysis_input["selected_providers"]) < 3:
+        elif len(create_analysis_input["selected_providers"]) <= 3:
             st.session_state.isvalid_threat_model = 2
             return False
     if create_analysis_input["threat_model"] == "Malicious":
-        if len(create_analysis_input["selected_providers"]) >= 4:
+        if len(create_analysis_input["selected_providers"]) == 4:
             st.session_state.isvalid_threat_model = 1
             return True
-        elif len(create_analysis_input["selected_providers"]) < 4:
+        elif len(create_analysis_input["selected_providers"]) <= 4:
             st.session_state.isvalid_threat_model = 3
             return False
     return False
+
 
 def validate_analysis_details() -> bool:
     if (
@@ -617,7 +357,7 @@ def validate_analysis_details() -> bool:
         st.session_state["isvalid_analysis_details"] = 2
         return False
     else:
-        isValid = validate_sql(type_mapping)
+        isValid = validate_sql(TYPE_MAPPING)
         if isValid:
             st.session_state["isvalid_analysis_details"] = 1
             return True
@@ -629,7 +369,7 @@ def validate_analysis_details() -> bool:
 def data2json():
     # handle data schema
     result_dict = {}
-    result_dict['schema'] = {}
+    result_dict["schema"] = {}
     schema = create_analysis_input["user_input"]
     category_schema = create_analysis_input["category_schema"]
     for i, row in schema.iterrows():
@@ -640,24 +380,21 @@ def data2json():
 
         # If the field type is "Category", map it to category_schema
         if field_type == "Category":
-            field_data["categories"] = category_schema[i]['Category'].tolist()
+            field_data["categories"] = category_schema[i]["Category"].tolist()
 
-        result_dict['schema'][field] = field_data
+        result_dict["schema"][field] = field_data
     # handle threat model and providers
     result_dict["threat_model"] = create_analysis_input["threat_model"]
     result_dict["selected_providers"] = create_analysis_input["selected_providers"]
     result_dict["query"] = create_analysis_input["query"]
     result_dict["description"] = create_analysis_input["description"]
-    
+
     for key, value in result_dict.items():
         if isinstance(value, pd.DataFrame):
             result_dict[key] = value.to_dict()
     print(result_dict)
 
     return json.dumps(result_dict)
-
-
-# st.write(data2json())
 
 
 if st.session_state.submitted:
@@ -685,7 +422,7 @@ if (
         analysis_name=create_analysis_input["query_name"],
         analyst_id=1,
         details=data2json(),
-        status="Created"
+        status="Created",
     )
     isSuccess, e = insert_new_analysis(engine, new_analysis)
     if isSuccess:

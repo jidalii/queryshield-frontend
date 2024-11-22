@@ -28,23 +28,6 @@ engine = create_engine(
     "postgresql+psycopg2://user1:12345678!@localhost:5432/queryshield"
 )
 
-# def history_table():
-sample_data = {
-    "Analysis ID": ["1012323", "103431346", "1134134173"],
-    "Analysis Name": ["Query1", "Query2", "Query3"],
-    "Analyst Name": ["Alice", "Alice", "Alice"],
-    "Analyst ID": ["101", "101", "101"],
-    "Time Created": ["2024-10-12 08:30", "2024-10-12 09:00", "2024-10-12 10:30"],
-    "Analysis Description": [
-        {"parameter_1": "value_1", "parameter_2": 100},
-        {"parameter_1": "value_2", "parameter_2": 200},
-        {"parameter_1": "value_3", "parameter_2": 300},
-    ],
-    "Owners Registered": [10, 20, 30],
-    "Status": ["Created", "Ready", "Failed"],
-}
-
-projectlist = [["project1", "project2"], [1,2]]
 
 query_result = fetch_analyst_analysis_history(engine, 1)
 
@@ -68,6 +51,5 @@ for analysis in query_result:
     
     processed_result.append(processed_row)
 test_df = pd.DataFrame(processed_result)
-# test_df = pd.DataFrame(projectlist, columns=["Projects", 'num'])
 
 analysis_history_component(test_df)

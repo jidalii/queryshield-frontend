@@ -25,7 +25,11 @@ sidebar_login_component(engine)
 
 # Convert the dictionary into a Pandas DataFrame
 query_result = fetch_all_analysis_catalog(engine)
-column_names = query_result[0].keys()
+# print("query_result", query_result[0])
+# print("query_result", type(query_result[0]))
+# print("Column names:", query_result[0]._fields)
+# column_names = list(query_result[0]._fields)
+column_names = list(query_result[0].keys())
 boston_tz = pytz.timezone('America/New_York')
     
 processed_result = []

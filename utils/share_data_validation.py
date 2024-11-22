@@ -26,6 +26,7 @@ def validate_share_data(data_df, column_types):
             return False, err
     return True, None
 
+
 def validate_share_data_file(data_df, names, column_types):
     if len(data_df.columns) != len(names):
         err = f"Column count mismatch: DataFrame has {len(data_df.columns)} columns, expected {len(names)}."

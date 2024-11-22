@@ -3,10 +3,7 @@ import streamlit as st
 import pandas as pd
 import pytz
 from sqlalchemy import create_engine
-from components.share_data_editor_component import share_data_editor_component
 from components.sidebar_login_component import sidebar_login_component
-from configs.configs import schema_types
-from configs.html import html_contents
 from utils.row_detection import *
 from utils.helpers import (
     convert_dict_to_df,
@@ -19,6 +16,14 @@ from utils.db.db_services import (
     is_registered_owner,
 )
 from utils.share_data_validation import validate_share_data_file
+# from my_component import my_component
+import streamlit.components.v1 as components
+
+_my_component = components.declare_component(
+    "my_component",  # Name of the component (matches frontend's name)
+    path="./component-template/template/my_component/frontend/build",  # Adjust path to your build folder
+)
+
 
 # Constants
 DATABASE_URL = "postgresql+psycopg2://user1:12345678!@localhost:5432/queryshield"
@@ -61,6 +66,8 @@ category_dict = convert_dict_to_category_dict(raw_schema)
 names, dtypes = fetch_name_and_type_tuple(raw_schema)
 table_headers = [f"{name} ({dtype})" for name, dtype in zip(names, dtypes)]
 
+df_to_share = pd.DataFrame(columns=names)
+
 
 initialize_session_state()
 
@@ -69,6 +76,7 @@ st.markdown("<h3 style='text-align: center; color:black;'>Upload as CSV or Enter
 uploaded_file = st.file_uploader("", label_visibility="collapsed", type="csv")
 if uploaded_file is not None:
     st.session_state["data_to_share"] = pd.read_csv(uploaded_file)
+    df_to_share = st.session_state["data_to_share"]
     print("file uploaded")
 
 # Column Configuration for Data Editor
@@ -95,12 +103,33 @@ column_config = construct_column_config_share_data(
 
 # Data Editor
 st.session_state["data_to_share"] = st.data_editor(
-    st.session_state["data_to_share"],
+    df_to_share,
     column_config=column_config,
     num_rows="dynamic",
     hide_index=True,
     use_container_width=True,
 )
+
+data_dict = st.session_state["data_to_share"].to_dict(orient="list")
+replication_factor = 3
+
+def my_component(data, schema, replication_factor, key=None):
+    """
+    Wrapper for the custom Streamlit component.
+
+    Args:
+        data (dict): Data to be secret shared.
+        schema (list): Table schema (list of column names).
+        replication_factor (int): Replication factor for secret sharing.
+        key (str): Unique key for the Streamlit component instance.
+
+    Returns:
+        Any: The result from the component.
+    """
+    return _my_component(
+        data={"data": data, "schema": schema}, replication_factor=replication_factor, key=key
+    )
+
 
 # Data Submission
 def handle_submission():
@@ -113,11 +142,14 @@ def handle_submission():
         else:
             success, err = register_data_owner(engine, aid, uid)
             if success:
+                outputs = my_component(data_dict, names, replication_factor)
+                print(outputs)
                 st.success("Success")
             else:
                 st.error(f"Error: {err}")
     else:
         st.error(f"Error: {err}")
+
 
 if st.button("Secret Share Data"):
     handle_submission()

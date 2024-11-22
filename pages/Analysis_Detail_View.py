@@ -1,5 +1,3 @@
-from multiprocessing.shared_memory import SharedMemory
-
 from sqlalchemy import create_engine
 import pytz
 
@@ -12,7 +10,7 @@ from utils.db.db_services import fetch_single_analysis
 from utils.helpers import convert_dict_to_df, convert_dict_to_category_dict
 from utils.row_detection import *
 from configs.configs import schema_types
-from configs.html import html_contents
+from configs.html import HTML_CONTENTS
 
 st.set_page_config("Analysis Detail View", layout="wide")
 
@@ -79,4 +77,4 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-html(html_contents)
+html(HTML_CONTENTS)
