@@ -16,13 +16,13 @@ from utils.db.db_services import (
     is_registered_owner,
 )
 from utils.share_data_validation import validate_share_data_file
-# from my_component import my_component
 import streamlit.components.v1 as components
+from my_component import my_component as _my_component
 
-_my_component = components.declare_component(
-    "my_component",  # Name of the component (matches frontend's name)
-    path="./component-template/template/my_component/frontend/build",  # Adjust path to your build folder
-)
+# _my_component = components.declare_component(
+#     "my_component",  # Name of the component (matches frontend's name)
+#     path="../component-template/template/my_component/frontend/build",  # Adjust path to your build folder
+# )
 
 
 # Constants
@@ -30,13 +30,10 @@ DATABASE_URL = "postgresql+psycopg2://user1:12345678!@localhost:5432/queryshield
 TIMEZONE = pytz.timezone("America/New_York")
 
 # Streamlit Page Configuration
-st.set_page_config(page_title="QueryShield", layout="wide", initial_sidebar_state="expanded")
 st.title("Share Data")
-st.sidebar.title("QueryShield")
 
 # Database Engine Initialization
 engine = create_engine(DATABASE_URL)
-sidebar_login_component(engine)
 
 # Session State Initialization
 def initialize_session_state():

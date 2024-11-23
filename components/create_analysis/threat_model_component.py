@@ -10,7 +10,7 @@ from utils.row_detection import *
 from configs.configs import CLOUD_PROVIDERS, THREAT_MODELS, TYPE_MAPPING
 from configs.html import VALIDATION_CSS
 
-def threat_model_component() -> None:
+def threat_model_component():
     create_analysis_input = st.session_state["create_analysis_input"]
     css_style = (
         "init"

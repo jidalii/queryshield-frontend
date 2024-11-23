@@ -1,21 +1,17 @@
-import asyncio
 import json
-import random
 
 import streamlit as st
 import pandas as pd
 
-from streamlit_extras.stylable_container import stylable_container
 from streamlit.components.v1 import html
 
 from multiprocessing.shared_memory import SharedMemory
 
 from sqlalchemy import create_engine
 
-from utils.auth.email_auth import login_handler, signup_handler
-from models.auth import UserRegistration, UserLogin
 from models.analysis import *
-from components.create_analysis.threat_model_component import threat_model_component, analysis_details_component
+from components.create_analysis.threat_model_component import threat_model_component
+from components.create_analysis.analysis_details_component import analysis_details_component
 from utils.db.schema_validation import *
 from utils.db.db_services import *
 from utils.row_detection import *
@@ -25,33 +21,33 @@ from components.sidebar_login_component import (
     sidebar_login_component,
 )
 
-st.set_page_config(
-    page_title="QueryShield",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+# st.set_page_config(
+#     page_title="QueryShield",
+#     layout="wide",
+#     initial_sidebar_state="expanded",
+# )
 
-st.sidebar.title("QueryShield")
+# st.sidebar.title("QueryShield")
 
 engine = create_engine(
     "postgresql+psycopg2://user1:12345678!@localhost:5432/queryshield"
 )
 
-if "logined" not in st.session_state:
-    st.session_state["logined"] = False
+# if "logined" not in st.session_state:
+#     st.session_state["logined"] = False
 
-sidebar_login_component(engine)
+# sidebar_login_component(engine)
 
-if "disabled" not in st.session_state:
-    st.session_state["disabled"] = False
-
-
-def disable():
-    st.session_state["disabled"] = True
+# if "disabled" not in st.session_state:
+#     st.session_state["disabled"] = False
 
 
-def submit_btn():
-    return st.button("Submit")
+# def disable():
+#     st.session_state["disabled"] = True
+
+
+# def submit_btn():
+#     return st.button("Submit")
 
 
 st.title("Create New Analysis")
@@ -431,23 +427,23 @@ if (
         st.error(f"DB error: {e}")
 
 
-if __name__ == "__main__":
-    import streamlit.web.bootstrap
+# if __name__ == "__main__":
+#     import streamlit.web.bootstrap
 
-    if "__streamlitmagic__" not in locals():
-        # Code adapted from bootstrap.py in streamlit
-        streamlit.web.bootstrap._fix_sys_path(__file__)
-        streamlit.web.bootstrap._fix_tornado_crash()
-        streamlit.web.bootstrap._fix_sys_argv(__file__, [])
-        streamlit.web.bootstrap._fix_pydeck_mapbox_api_warning()
-        # streamlit.web.bootstrap._fix_pydantic_duplicate_validators_error()
+#     if "__streamlitmagic__" not in locals():
+#         # Code adapted from bootstrap.py in streamlit
+#         streamlit.web.bootstrap._fix_sys_path(__file__)
+#         streamlit.web.bootstrap._fix_tornado_crash()
+#         streamlit.web.bootstrap._fix_sys_argv(__file__, [])
+#         streamlit.web.bootstrap._fix_pydeck_mapbox_api_warning()
+#         # streamlit.web.bootstrap._fix_pydantic_duplicate_validators_error()
 
-        server = CustomServer(__file__, is_hello=False)
+#         server = CustomServer(__file__, is_hello=False)
 
-        async def run_server():
-            await server.start()
-            streamlit.web.bootstrap._on_server_start(server)
-            streamlit.web.bootstrap._set_up_signal_handler(server)
-            await server.stopped
+#         async def run_server():
+#             await server.start()
+#             streamlit.web.bootstrap._on_server_start(server)
+#             streamlit.web.bootstrap._set_up_signal_handler(server)
+#             await server.stopped
 
-        asyncio.run(run_server())
+#         asyncio.run(run_server())
