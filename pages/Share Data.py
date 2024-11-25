@@ -16,7 +16,6 @@ from utils.db.db_services import (
     is_registered_owner,
 )
 from utils.share_data_validation import validate_share_data_file
-# from my_component import my_component
 import streamlit.components.v1 as components
 
 _my_component = components.declare_component(

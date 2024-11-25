@@ -5,22 +5,20 @@ import random
 import streamlit as st
 import pandas as pd
 
-from streamlit_extras.stylable_container import stylable_container
 from streamlit.components.v1 import html
 
 from multiprocessing.shared_memory import SharedMemory
 
 from sqlalchemy import create_engine
 
-from utils.auth.email_auth import login_handler, signup_handler
-from models.auth import UserRegistration, UserLogin
-from models.analysis import *
-from components.create_analysis.threat_model_component import threat_model_component, analysis_details_component
-from utils.db.schema_validation import *
-from utils.db.db_services import *
-from utils.row_detection import *
-from configs.configs import SCHEMA_TYPES, CLOUD_PROVIDERS, THREAT_MODELS, TYPE_MAPPING
-from configs.html import VALIDATION_CSS, HTML_CONTENTS
+from models.analysis import AnalysisCreation
+from components.create_analysis.threat_model_component import threat_model_component
+from components.create_analysis.analysis_details_component import analysis_details_component
+from utils.db.schema_validation import validate_sql
+from utils.db.db_services import insert_new_analysis
+from utils.row_detection import fake_click, CustomServer
+from configs.configs import SCHEMA_TYPES, TYPE_MAPPING
+from configs.html import HTML_CONTENTS
 from components.sidebar_login_component import (
     sidebar_login_component,
 )
@@ -107,84 +105,6 @@ if "last_user_input" in create_analysis_input and (
     or st.session_state["user_input_changed"] == 1
 ):
     df = create_analysis_input["last_user_input"].reset_index(drop=True)
-
-html_contents = """
-<script defer>
-const fakeButton = window.parent.document.querySelector("[data-testid^='stBaseButton-primary']");
-const tbl = window.parent.document.querySelector("[data-testid^='stDataFrameResizable']");
-const canvas = window.parent.document.querySelector("[data-testid^='data-grid-canvas']");
-let sortedBy = 1
-function sendPayload(obj) {
-    payloadStr = JSON.stringify(obj);
-    window.sessionStorage.setItem("payload", payloadStr);
-    fetch('/js_callback', {
-        method: 'POST',
-        body: payloadStr,
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(response => {
-        fakeButton.click();
-    });    
-}
-function updateColumnValue() {
-    const headers = canvas.querySelectorAll('th[role="columnheader"]');
-    let arrowFound = false;
-    
-    headers.forEach(header => {
-        const textContent = header.textContent.trim();
-        const colIndex = parseInt(header.getAttribute('aria-colindex'), 10);
-        if (textContent.startsWith('↑')) {
-            sortedBy = colIndex;
-            arrowFound = true;
-        } else if (textContent.startsWith('↓')) {
-            sortedBy = -colIndex;
-            arrowFound = true;
-        }
-    });
-    if (!arrowFound) {
-        sortedBy = 1;
-    }    
-    console.log(`Sorting column is now: ${sortedBy}`);
-}
-const sortObserver = new MutationObserver((mutations) => {
-    mutations.forEach((mutation) => {
-        if (mutation.type === 'characterData' || mutation.type === 'childList') {
-            updateColumnValue();
-        }
-    });
-}); 
-// Observe changes in the canvas element and its subtree
-sortObserver.observe(canvas, {
-    characterData: true,
-    childList: true,
-    subtree: true
-});
-function handleTableClick(event) {
-    // MutationObserver callback function
-    const cellObserverCallback = (mutationsList, observer) => {
-        for (const mutation of mutationsList) {
-            if (mutation.type === 'attributes' && mutation.attributeName === 'aria-selected') {
-                const target = mutation.target;
-                if (target.tagName === 'TD' && target.getAttribute('aria-selected') === 'true') {
-                    cellCoords = target.id.replace('glide-cell-','').replace('-',',');
-                    console.log(`Detected click on cell {${cellCoords}}, sorted by column "${sortedBy}"`);
-                    observer.disconnect(); // Stop observing once the element is found                    
-                    sendPayload({"action": "click", "cellId": cellCoords, "sortedByCol": sortedBy});                    
-                }
-            }
-        }
-    };
-    // Create a MutationObserver
-    const cellObserver = new MutationObserver(cellObserverCallback);  
-    // Observe changes in attributes in the subtree of the canvas element
-    cellObserver.observe(canvas, { attributes: true, subtree: true });
-}
-tbl.addEventListener('click', handleTableClick)
-console.log("Event listeners added!");
-</script>
-"""
 
 
 def schema_container():
