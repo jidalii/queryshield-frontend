@@ -25,6 +25,9 @@ from my_component import my_component as _my_component
 # )
 
 
+if "logged_in" in st.query_params:
+    st.session_state.logged_in = bool(st.query_params.get("logged_in", False))
+
 # Constants
 DATABASE_URL = "postgresql+psycopg2://user1:12345678!@localhost:5432/queryshield"
 TIMEZONE = pytz.timezone("America/New_York")

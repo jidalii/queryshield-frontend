@@ -46,7 +46,7 @@ def analysis_catalog_component(df):
             init(params) {
                 this.eGui = document.createElement('a');
                 this.eGui.innerText = "Share Data";
-                this.eGui.setAttribute('href', '/Share_Data?aid=' + params.data["aid"] + '&uid=' + params.data["analyst_id"]);
+                this.eGui.setAttribute('href', '/share_data&aid=' + params.data["aid"] + '&uid=' + params.data["analyst_id"]+ '&logged_in=true');
                 console.log(params);
                 this.eGui.setAttribute('style', "text-decoration:none");
                 this.eGui.setAttribute('target', "_blank");
@@ -57,7 +57,6 @@ def analysis_catalog_component(df):
             }
             """
         ),
-        # this.eGui.setAttribute('target', "_blank"); 
         width=300,
     )
 

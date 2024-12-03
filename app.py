@@ -1,5 +1,6 @@
 import asyncio
 import streamlit as st
+import time
 
 from sqlalchemy import create_engine
 
@@ -20,6 +21,9 @@ engine = create_engine(
 
 
 st.set_page_config("QueryShield", layout="wide")
+
+if "logged_in" in st.query_params:
+    st.session_state.logged_in = bool(st.query_params.get("logged_in", False))
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -100,7 +104,7 @@ analysis_catalog = st.Page(
     # default=True,
 )
 share_data = st.Page(
-    "webpages/Share Data.py",
+    "webpages/share_data.py",
     title="Share Data",
     icon=":material/notification_important:",
 )
@@ -112,29 +116,37 @@ analysis_detail_view = st.Page(
 )
 
 analyst_page_config = {
-    "Account": [logout_page],
     "Analyst": [create_analysis, analysis_history, see_results],
+    "Account": [logout_page],
 }
 
 data_owner_page_config = {
+    "Data Owner": [analysis_catalog],
+    # "Data Owner": [analysis_catalog, share_data],
     "Account": [logout_page],
-    "Data Owner": [analysis_catalog, share_data],
 }
 
 
+
+
 if st.session_state.logged_in:
-    username = st.session_state["user"]["first_name"]
-    st.sidebar.write(f"Welcome, {username}!")
-    if st.session_state["user"]["role"] == "data_owner":
-        pg = st.navigation(data_owner_page_config)
+    # username = st.session_state["user"]["first_name"]
+    # st.sidebar.write(f"Welcome, {username}!")
+    # if st.session_state["user"]["role"] == "data_owner":
+    page = st.query_params.get("page", ["home"])[0]
+    if page == "share_data":
+        share_data(st.query_params)
     else:
-        pg = st.navigation(analyst_page_config)
-    pg.run()
+        pg = st.navigation(data_owner_page_config)
+        # else:
+        #     pg = st.navigation(analyst_page_config)
+        pg.run()
 else:
     # login_page()
     login()
-    pg = st.navigation([login_page, signup_page])
-    pg.run()
+    time.sleep(0.5)
+    # pg = st.navigation([login_page, signup_page])
+    # pg.run()
 
 if __name__ == "__main__":
     import streamlit.web.bootstrap
