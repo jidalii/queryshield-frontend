@@ -1,7 +1,9 @@
 from sqlalchemy import text
 import streamlit as st
+import jwt
 
 from models.auth import UserRegistration, UserLogin
+from configs.secrets import JWT_SECRET_KEY
 
 
 def login_handler(engine, user: UserLogin):
@@ -13,26 +15,26 @@ def login_handler(engine, user: UserLogin):
     with engine.connect() as conn:
         try:
             result = conn.execute(login_query, {"email": user.email}).fetchone()
-            st.write(result)
             if not result:
-                st.error("Account not found")
+                return True, "Account not found"
             else:
                 user_data = dict(result)
                 stored_pin = user_data.get("pin")
                 if stored_pin == user.password:
                     st.session_state["logined"] = True
                     user_data.pop("pin")
-                    print(user_data)
-                    # cookies["uid"] = user_data.get("uid")
-                    # cookies["first_name"] = user_data.get("first_name")
-                    # cookies.save()
-                    st.session_state['user'] = user_data
-                    st.success("Login successful!")
-                    st.rerun()
+                    st.session_state["user"] = user_data
+                    encoded_jwt = jwt.encode(
+                        {"user": user_data}, JWT_SECRET_KEY, algorithm="HS256"
+                    )
+                    st.session_state["jwt_token"] = encoded_jwt
+                    
+                    return True, None
                 else:
-                    st.error("Incorrect password")
+                    return False, "Incorrect password"
         except Exception as e:
-            st.error("Encountered error:", e)
+            err = f"Encountered error: {e}"
+            return False, err
 
 
 def signup_handler(engine, newuser: UserRegistration):
@@ -41,10 +43,7 @@ def signup_handler(engine, newuser: UserRegistration):
             text("SELECT * FROM users WHERE email = :email"), {"email": newuser.email}
         )
         if int(result.rowcount) > 0:
-            st.write(result)
-            st.write(result.rowcount)
-            print(result)
-            st.error("The email is already in use.")
+            return False, "The email is already in use."
         else:
             insert_query = text(
                 """
@@ -60,9 +59,10 @@ def signup_handler(engine, newuser: UserRegistration):
                         "last_name": newuser.last_name,
                         "email": newuser.email,
                         "pin": newuser.password,
-                        "role": newuser.role
+                        "role": newuser.role,
                     },
                 )
-                st.success("Signed up successfully!")
+                return True, None
             except Exception as e:
-                st.error("Encountered error:", e)
+                err = f"Encountered error: {e}"
+                return False, err

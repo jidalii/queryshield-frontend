@@ -1,3 +1,5 @@
+import pytz
+
 SCHEMA_TYPES = ["Integer", "Varchar", "String", "Float", "Category"]
 
 TYPE_MAPPING = {
@@ -19,3 +21,5 @@ CLOUD_PROVIDERS = [
 ]
 
 THREAT_MODELS = ["Semi-Honest", "Malicious"]
+
+TIMEZONE = pytz.timezone("America/New_York")

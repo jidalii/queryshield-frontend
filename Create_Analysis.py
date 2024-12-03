@@ -1,27 +1,30 @@
+from typing import Tuple
 import asyncio
 import json
-import random
+import pandas as pd
+from multiprocessing.shared_memory import SharedMemory
+from sqlalchemy import create_engine
+import jwt
 
 import streamlit as st
-import pandas as pd
-
 from streamlit.components.v1 import html
-
-from multiprocessing.shared_memory import SharedMemory
-
-from sqlalchemy import create_engine
 
 from models.analysis import AnalysisCreation
 from components.create_analysis.threat_model_component import threat_model_component
-from components.create_analysis.analysis_details_component import analysis_details_component
-from utils.db.schema_validation import validate_sql
-from utils.db.db_services import insert_new_analysis
-from utils.row_detection import fake_click, CustomServer
-from configs.configs import SCHEMA_TYPES, TYPE_MAPPING
-from configs.html import HTML_CONTENTS
+from components.create_analysis.analysis_details_component import (
+    analysis_details_component,
+)
 from components.sidebar_login_component import (
     sidebar_login_component,
 )
+from utils.db.schema_validation import validate_sql
+from utils.db.db_services import insert_new_analysis
+from utils.row_detection import fake_click, CustomServer
+from utils.auth.jwt_token import decode_jwt_token
+from configs.configs import SCHEMA_TYPES, TYPE_MAPPING
+from configs.html import HTML_CONTENTS
+from configs.secrets import DATABASE_URL
+from configs.secrets import JWT_SECRET_KEY
 
 st.set_page_config(
     page_title="QueryShield",
@@ -31,9 +34,7 @@ st.set_page_config(
 
 st.sidebar.title("QueryShield")
 
-engine = create_engine(
-    "postgresql+psycopg2://user1:12345678!@localhost:5432/queryshield"
-)
+engine = create_engine(DATABASE_URL)
 
 if "logined" not in st.session_state:
     st.session_state["logined"] = False
@@ -56,8 +57,6 @@ st.title("Create New Analysis")
 if "user" in st.session_state:
     _user = st.session_state["user"]
     st.write(f"User: {_user}")
-
-_JS_TO_PD_COL_OFFSET: int = -2
 
 # Create shared memory for the payload
 try:
@@ -82,7 +81,8 @@ create_analysis_input = st.session_state["create_analysis_input"]
 
 if "table_name" not in create_analysis_input:
     create_analysis_input["table_name"] = ""
-
+if "temp_enums" not in st.session_state:
+    st.session_state["temp_enums"] = []
 
 create_analysis_input["table_name"] = st.text_input(
     "Table Name", create_analysis_input["table_name"]
@@ -167,6 +167,7 @@ def schema_container():
                 "category_schema"
             ][index].reset_index(drop=True)
 
+
 schema_container()
 
 # # Create a fake button:
@@ -176,9 +177,11 @@ st.markdown(
     <style>
     div[data-testid="stTextInput"][data-st-key="CELL_ID"] {
         visibility: hidden;
+        height: 1px;
     }
     button[kind="primary"] {
         visibility: hidden;
+        height: 1px;
     }
     </style>
     """,
@@ -186,10 +189,11 @@ st.markdown(
 )
 html(HTML_CONTENTS)
 
-st.write(f"position: {st.session_state.cell_position}")
-st.write(create_analysis_input)
-st.write(create_analysis_input["category_schema"])
-st.write(st.session_state.schema_types)
+# DEBUG
+# st.write(f"position: {st.session_state.cell_position}")
+# st.write(create_analysis_input)
+# st.write(create_analysis_input["category_schema"])
+# st.write(st.session_state.schema_types)
 
 column_name = create_analysis_input["user_input"].get("Column Name", "")
 
@@ -231,6 +235,8 @@ if "description" not in create_analysis_input:
     create_analysis_input["description"] = ""
 
 analysis_details_component()
+
+# DEBUG
 # st.write(
 #     [
 #         create_analysis_input["query_name"],
@@ -317,13 +323,7 @@ def data2json():
     return json.dumps(result_dict)
 
 
-if st.session_state.submitted:
-    if "disabled" not in st.session_state:
-        st.session_state["disabled"] = False
-
-    def disable():
-        st.session_state["disabled"] = True
-
+if st.session_state.submitted and not st.session_state["disabled"]:
     disable()
     create_analysis_input["last_user_input"] = create_analysis_input["user_input"]
     st.session_state["Submit"] = st.session_state.submitted
@@ -334,21 +334,48 @@ if st.session_state.submitted:
     else:
         st.rerun()
 
-if (
-    st.session_state["isvalid_analysis_details"] == 1
-    and st.session_state["isvalid_analysis_details"] == 1
-):
-    new_analysis = AnalysisCreation(
-        analysis_name=create_analysis_input["query_name"],
-        analyst_id=1,
-        details=data2json(),
-        status="Created",
-    )
-    isSuccess, e = insert_new_analysis(engine, new_analysis)
-    if isSuccess:
-        st.success("Success")
+
+def validate_create_analysis_user() -> Tuple[bool, str]:
+    if "jwt_token" in st.session_state:
+        try:
+            ok, res = decode_jwt_token(st.session_state["jwt_token"])
+            if not ok:
+                return False, res
+
+            if "user" not in res:
+                return False, "Invalid JWT Token"
+            if "role" not in res["user"] or res["user"]["role"] != "analyst":
+                return False, "Invalid Role"
+            return True, ""
+        except jwt.ExpiredSignatureError:
+            return False, "Expired JWT Token"
+    return False, "JWT Token not found"
+
+
+isValidAnalyst, err = validate_create_analysis_user()
+# print(isValidAnalyst, err)  # DEBUG
+if st.session_state["disabled"]:
+    st.error("Analysis already submitted.")
+else:
+    if not isValidAnalyst:
+        st.error(f"Error: {err}")
     else:
-        st.error(f"DB error: {e}")
+        if (
+            st.session_state["isvalid_threat_model"] == 1
+            and st.session_state["isvalid_analysis_details"] == 1
+        ):
+
+            new_analysis = AnalysisCreation(
+                analysis_name=create_analysis_input["query_name"],
+                analyst_id=1,
+                details=data2json(),
+                status="Created",
+            )
+            isSuccess, err = insert_new_analysis(engine, new_analysis)
+            if isSuccess:
+                st.success("Success")
+            else:
+                st.error(f"DB error: {err}")
 
 
 if __name__ == "__main__":
