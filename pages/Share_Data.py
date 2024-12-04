@@ -1,31 +1,16 @@
-# Imports
 import streamlit as st
 import pandas as pd
-import time
 from sqlalchemy import create_engine
 from components.sidebar_login_component import sidebar_login_component
-# from utils.row_detection import *
+from components.share_data.secret_share_component import secret_share_component
 from utils.helpers import (
     convert_dict_to_df,
     convert_dict_to_category_dict,
     fetch_name_and_type_tuple,
 )
-from utils.db.db_services import (
-    fetch_single_analysis,
-    register_data_owner,
-    is_registered_owner,
-)
-from utils.share_data_validation import validate_share_data_file
-from configs.configs import TIMEZONE
-import streamlit.components.v1 as components
+import utils.share_data_helper as share_data_helper
+from configs.secrets import DATABASE_URL
 
-_my_component = components.declare_component(
-    "my_component",  # Name of the component (matches frontend's name)
-    path="./component-template/template/my_component/frontend/build",  # Adjust path to your build folder
-)
-
-# Constants
-DATABASE_URL = "postgresql+psycopg2://user1:12345678!@localhost:5432/queryshield"
 
 # Streamlit Page Configuration
 st.set_page_config(
@@ -34,37 +19,16 @@ st.set_page_config(
 st.title("Share Data")
 st.sidebar.title("QueryShield")
 
+share_data_helper.check_query_params()
+share_data_helper.initialize_user()
+
 # Database Engine Initialization
 engine = create_engine(DATABASE_URL)
 sidebar_login_component(engine)
 
-
-# Session State Initialization
-def initialize_session_state():
-    if "view_category_df" not in st.session_state:
-        st.session_state["view_category_df"] = {}
-    if "cell_position" not in st.session_state:
-        st.session_state["cell_position"] = (0, 0)
-    if "data_to_share" not in st.session_state:
-        st.session_state["data_to_share"] = pd.DataFrame(columns=names)
-
-
 # Fetch and Format Analysis Data
-def fetch_analysis_data():
-    analysis = fetch_single_analysis(engine, st.query_params["aid"])
-    time_created = (
-        analysis["time_created"].astimezone(TIMEZONE).strftime("%Y:%m:%d %H:%M")
-    )
-    return {
-        "aid": analysis["aid"],
-        "analysis_name": analysis["analysis_name"],
-        "time_created": time_created,
-        "details": analysis["details"],
-        "status": analysis["status"],
-    }
 
-
-analysis_details = fetch_analysis_data()
+analysis_details = share_data_helper.fetch_analysis_data(engine)
 raw_schema = analysis_details["details"]["schema"]
 schema = convert_dict_to_df(raw_schema)
 threat_model = analysis_details["details"]["threat_model"]
@@ -79,20 +43,19 @@ elif threat_model == "Semi-Honest":
     replication_factor = 3
 
 df_to_share = pd.DataFrame(columns=names)
+share_data_helper.initialize_session_state(names)
 
-
-initialize_session_state()
 
 # File Upload
 st.markdown(
     "<h3 style='text-align: center; color:black;'>Upload as CSV or Enter Data Here</h3>",
     unsafe_allow_html=True,
 )
+
 uploaded_file = st.file_uploader("", label_visibility="collapsed", type="csv")
 if uploaded_file is not None:
     st.session_state["data_to_share"] = pd.read_csv(uploaded_file)
     df_to_share = st.session_state["data_to_share"]
-    # print("file uploaded")
 
 
 # Column Configuration for Data Editor
@@ -129,54 +92,12 @@ st.session_state["data_to_share"] = st.data_editor(
 
 data_dict = st.session_state["data_to_share"].to_dict(orient="list")
 
+res = secret_share_component(
+    data_dict, names, replication_factor, "secret_data_share_test"
+)
 
-def my_component(data, schema, replication_factor, key=None):
-    """
-    Wrapper for the custom Streamlit component.
-
-    Args:
-        data (dict): Data to be secret shared.
-        schema (list): Table schema (list of column names).
-        replication_factor (int): Replication factor for secret sharing.
-        key (str): Unique key for the Streamlit component instance.
-
-    Returns:
-        Any: The result from the component.
-    """
-    return _my_component(
-        data={"data": data, "schema": schema},
-        replication_factor=replication_factor,
-        key=key,
-    )
-
-
-# Data Submission
-def handle_submission():
-    is_valid, err = validate_share_data_file(
-        st.session_state["data_to_share"], names, dtypes
-    )
-    if is_valid:
-        aid = st.query_params["aid"]
-        uid = st.query_params["uid"]
-        if is_registered_owner(engine, aid, uid):
-            st.error("Error: you have already registered for this analysis")
-        else:
-            success = True
-            # success, err = register_data_owner(engine, aid, uid)
-            if success:
-                if replication_factor == -1:
-                    st.error("Error: invalid threat model")
-                else:
-                    outputs = my_component(data_dict, names, replication_factor)
-                    print(outputs)
-                    outputs
-                    time.sleep(5)
-                    st.success("Success")
-            else:
-                st.error(f"Error: {err}")
-    else:
-        st.error(f"Error: {err}")
-
-
+# Event-driven call to handle submission
 if st.button("Secret Share Data"):
-    handle_submission()
+    share_data_helper.handle_submission(engine, names, dtypes, replication_factor)
+
+st.write(res)

@@ -4,8 +4,8 @@ import pytz
 import streamlit as st
 from streamlit.components.v1 import html
 
-from components.analysis_description_component import view_threat_model_component, view_analysis_details_component
-from components.schema_table_component import schema_table_component
+from components.analysis_detail.analysis_description_component import view_threat_model_component, view_analysis_details_component
+from components.analysis_detail.schema_table_component import schema_table_component
 from utils.db.db_services import fetch_single_analysis
 from utils.helpers import convert_dict_to_df, convert_dict_to_category_dict
 from utils.row_detection import fake_click

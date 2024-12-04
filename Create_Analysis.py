@@ -14,17 +14,17 @@ from components.create_analysis.threat_model_component import threat_model_compo
 from components.create_analysis.analysis_details_component import (
     analysis_details_component,
 )
-from components.sidebar_login_component import (
-    sidebar_login_component,
-)
+from components.sidebar_login_component import sidebar_login_component
+
 from utils.db.schema_validation import validate_sql
 from utils.db.db_services import insert_new_analysis
 from utils.row_detection import fake_click, CustomServer
 from utils.auth.jwt_token import decode_jwt_token
+import utils.create_analysis_helper as create_analysis_helper
+
 from configs.configs import SCHEMA_TYPES, TYPE_MAPPING
 from configs.html import HTML_CONTENTS
 from configs.secrets import DATABASE_URL
-from configs.secrets import JWT_SECRET_KEY
 
 st.set_page_config(
     page_title="QueryShield",
@@ -33,6 +33,9 @@ st.set_page_config(
 )
 
 st.sidebar.title("QueryShield")
+
+create_analysis_helper.initialize_session_state()
+create_analysis_input = st.session_state["create_analysis_input"]
 
 engine = create_engine(DATABASE_URL)
 
@@ -54,9 +57,6 @@ def submit_btn():
 
 
 st.title("Create New Analysis")
-if "user" in st.session_state:
-    _user = st.session_state["user"]
-    st.write(f"User: {_user}")
 
 # Create shared memory for the payload
 try:
@@ -69,35 +69,13 @@ except FileExistsError:
 # *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*//
 
 st.subheader("Data Schema")
-if "table_name" not in st.session_state:
-    st.session_state["table_name"] = ""
-if "cell_position" not in st.session_state:
-    st.session_state["cell_position"] = (0, 0)
-
-if "create_analysis_input" not in st.session_state:
-    st.session_state["create_analysis_input"] = {}
-
-create_analysis_input = st.session_state["create_analysis_input"]
-
-if "table_name" not in create_analysis_input:
-    create_analysis_input["table_name"] = ""
-if "temp_enums" not in st.session_state:
-    st.session_state["temp_enums"] = []
 
 create_analysis_input["table_name"] = st.text_input(
     "Table Name", create_analysis_input["table_name"]
 )
 
-if "user_input" not in create_analysis_input:
-    create_analysis_input["user_input"] = pd.DataFrame()
-if "previous_df" not in st.session_state:
-    st.session_state.previous_df = pd.DataFrame([])
-if "category_schema" not in create_analysis_input:
-    create_analysis_input["category_schema"] = {}
-if "schema_types" not in st.session_state:
-    st.session_state.schema_types = []
-if "user_input_changed" not in st.session_state:
-    st.session_state.user_input_changed = 0
+create_analysis_input = st.session_state["create_analysis_input"]
+
 
 df = pd.DataFrame(columns=["name", "units", "type"])
 if "last_user_input" in create_analysis_input and (
@@ -189,12 +167,6 @@ st.markdown(
 )
 html(HTML_CONTENTS)
 
-# DEBUG
-# st.write(f"position: {st.session_state.cell_position}")
-# st.write(create_analysis_input)
-# st.write(create_analysis_input["category_schema"])
-# st.write(st.session_state.schema_types)
-
 column_name = create_analysis_input["user_input"].get("Column Name", "")
 
 st.divider()
@@ -203,22 +175,9 @@ st.divider()
 # *                          THREAT MODEL                      *//
 # *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*//
 
-# ********** SESSION INITILIAZARION **********
-if "threat_model" not in create_analysis_input:
-    create_analysis_input["threat_model"] = ""
-if "selected_providers" not in create_analysis_input:
-    create_analysis_input["selected_providers"] = []
-if "isvalid_threat_model" not in st.session_state:
-    st.session_state["isvalid_threat_model"] = "init"
-if "isvalid_analysis_details" not in st.session_state:
-    st.session_state["isvalid_analysis_details"] = "init"
-if "isvalid_sql" not in st.session_state:
-    st.session_state["isvalid_sql"] = True
-
 st.subheader("Threat Model")
-
 threat_model_component()
-# st.write(create_analysis_input["selected_providers"])
+
 st.divider()
 
 # *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*//
@@ -236,14 +195,6 @@ if "description" not in create_analysis_input:
 
 analysis_details_component()
 
-# DEBUG
-# st.write(
-#     [
-#         create_analysis_input["query_name"],
-#         create_analysis_input["query"],
-#         create_analysis_input["description"],
-#     ]
-# )
 st.divider()
 
 if "Submit" not in st.session_state:
@@ -353,7 +304,6 @@ def validate_create_analysis_user() -> Tuple[bool, str]:
 
 
 isValidAnalyst, err = validate_create_analysis_user()
-# print(isValidAnalyst, err)  # DEBUG
 if st.session_state["disabled"]:
     st.error("Analysis already submitted.")
 else:

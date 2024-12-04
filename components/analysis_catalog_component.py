@@ -9,6 +9,7 @@ def analysis_catalog_component(df):
     gd.configure_column("analyst_id", header_name="Analyst ID")
     gd.configure_column("time_created", header_name="Time Created")
     gd.configure_column("owners_count", header_name="Owners Registered")
+    gd.configure_column("jwt", hide=True)
 
     # Example for configuring a column with a custom cell renderer
     gd.configure_column(
@@ -20,7 +21,7 @@ def analysis_catalog_component(df):
             init(params) {
                 this.eGui = document.createElement('a');
                 this.eGui.innerText = "View Details";
-                this.eGui.setAttribute('href', '/Analysis_Detail_View?aid=' + params.data["aid"]);
+                this.eGui.setAttribute('href', '/Analysis_Detail?aid=' + params.data["aid"]);
                 console.log(params);
                 this.eGui.setAttribute('style', "text-decoration:none");
                 this.eGui.setAttribute('target', "_blank");
@@ -43,7 +44,7 @@ def analysis_catalog_component(df):
             init(params) {
                 this.eGui = document.createElement('a');
                 this.eGui.innerText = "Share Data";
-                this.eGui.setAttribute('href', '/Share_Data?aid=' + params.data["aid"] + '&uid=' + params.data["analyst_id"]);
+                this.eGui.setAttribute('href', '/Share_Data?aid=' + params.data["aid"] + '&jwt=' + params.data["jwt"]);
                 console.log(params);
                 this.eGui.setAttribute('style', "text-decoration:none");
                 this.eGui.setAttribute('target', "_blank");

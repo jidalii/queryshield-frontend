@@ -1,6 +1,5 @@
-import jwt
 from typing import Tuple
-
+import jwt
 from configs.secrets import JWT_SECRET_KEY
 
 
@@ -18,19 +17,48 @@ def decode_jwt_token(token: str) -> Tuple[bool, str | dict]:
     except Exception as e:
         return False, f"Error: {e}"
 
-def is_valid_analysis_detail_view_user(token: str)-> Tuple[bool, str]:
-    '''
+
+def is_valid_analysis_detail_view_user(token: str) -> Tuple[bool, str]:
+    """
     Check if the user is valid for the Analysis Detail View page
-    '''
+    """
     ok, payload = decode_jwt_token(token)
     if not ok:
         False, "Invalid Access"
 
     uid = -1
-    if 'user' in payload and 'uid' in payload['user']:
-        uid = payload['user']['uid']
+    if "user" in payload and "uid" in payload["user"]:
+        uid = payload["user"]["uid"]
     else:
         False, "Invalid Access"
     if uid == -1:
         False, "Invalid Access"
     return True, uid
+
+
+def is_valid_data_owner(token: str) -> Tuple[bool, str]:
+    ok, payload = decode_jwt_token(token)
+    if not ok:
+        False, "Invalid Access"
+
+    if (
+        "user" in payload
+        and "role" in payload["user"]
+        and payload["user"]["role"] == "data_owner"
+    ):
+        return True, payload["user"]["uid"]
+    return False, "Invalid Access"
+
+
+def validate_data_share_access(token: str) -> Tuple[bool, str]:
+    ok, payload = decode_jwt_token(token)
+    if not ok:
+        False, "Invalid Access"
+
+    if (
+        "user" in payload
+        and "role" in payload["user"]
+        and payload["user"]["role"] == "data_owner"
+    ):
+        return True, payload
+    return False, "Invalid Access"

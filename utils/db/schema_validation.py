@@ -1,6 +1,8 @@
 import streamlit as st
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 import sqlalchemy
+from configs.secrets import DATABASE_URL
+
 
 def create_table_sql(type_mapping) -> str:
     print("create_table_sql")
@@ -90,34 +92,23 @@ def drop_table_sql() -> str:
 
 
 def validate_sql(type_mapping):
-    engine = create_engine(
-        "postgresql+psycopg2://user1:12345678!@localhost:5433/queryshield_verification"
-    )
+    engine = create_engine(DATABASE_URL)
     create_analysis_input = st.session_state["create_analysis_input"]
     query = create_analysis_input["query"]
 
     find_enums()
     try:
         with engine.connect() as conn:
-            print("drop_table_sql")
             conn.execute(sqlalchemy.text(drop_table_sql()))
             drop_enums_statement = drop_enums_sql()
             if drop_enums_statement != "":  # Only execute if it's not empty
-                print(f"Executing drop_enums_sql: '{drop_enums_statement}'")
                 conn.execute(sqlalchemy.text(drop_enums_statement))
-            print("create_table_sql")
             conn.execute(sqlalchemy.text(create_table_sql(type_mapping)))
-            print(
-                "query",
-            )
             conn.execute(sqlalchemy.text(query))
-            print("drop_table_sql")
             conn.execute(sqlalchemy.text(drop_table_sql()))
-            print("drop_enums_sql")
             if drop_enums_statement != "":
                 conn.execute(sqlalchemy.text(drop_enums_statement))
             st.session_state["temp_enums"] = []
             return True
     except Exception as e:
-        print(e)
         return False

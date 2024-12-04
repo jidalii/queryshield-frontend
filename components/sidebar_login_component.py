@@ -60,6 +60,3 @@ def sidebar_login_component(engine):
         if signup:
             signup_form(engine)
             
-        # # DEBUG: Display user session if exists
-        # if "user" in st.session_state:
-        #     st.session_state["user"]
