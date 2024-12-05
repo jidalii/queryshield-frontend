@@ -1,3 +1,6 @@
+-- db_storage_setup.sql
+\connect storage
+
 -- Create ENUM type for user_role if it does not exist
 DO $$ 
 BEGIN

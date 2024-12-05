@@ -5,7 +5,7 @@ name: queryshield
 services:
   db_storage:
     image: postgres:15
-    container_name: db_storage
+    container_name: queryshield_db
     env_file:
       - .env
     environment:
@@ -16,6 +16,7 @@ services:
       - "5432:5432"  # Map to a different host port if needed
     volumes:
       - pg_data_queryshield:/var/lib/postgresql/data
+      - ./sql/db_setup.sql:/docker-entrypoint-initdb.d/db_setup.sql
       - ./sql/db_storage_setup.sql:/docker-entrypoint-initdb.d/db_storage_setup.sql
     restart: unless-stopped
     networks:
