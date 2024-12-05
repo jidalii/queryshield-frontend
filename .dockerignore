@@ -1,0 +1,30 @@
+# Ignore Python virtual environment
+venv/
+
+# Ignore Python cache files
+**/__pycache__/
+*.py[cod]
+*.pyo
+
+# Ignore Docker-related files
+docker-compose.yaml
+Dockerfile
+
+# Ignore logs and temporary files
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Ignore hidden files and directories
+.*
+
+# Ignore compiled files
+*.so
+*.o
+*.out
+
+*.md
+
+sample_data/
+docs/

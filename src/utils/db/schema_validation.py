@@ -1,11 +1,11 @@
 import streamlit as st
 from sqlalchemy import create_engine
 import sqlalchemy
-from configs.secrets import DATABASE_URL
+from configs.secrets import DATABASE_URL_VERIFICATION
+from configs.configs import TYPE_MAPPING
 
 
-def create_table_sql(type_mapping) -> str:
-    print("create_table_sql")
+def create_table_sql() -> str:
     create_analysis_input = st.session_state["create_analysis_input"]
     user_input = create_analysis_input["user_input"]
     table_name = create_analysis_input["table_name"]
@@ -14,7 +14,7 @@ def create_table_sql(type_mapping) -> str:
 
     sql_statements = []
 
-    create_table_sql = f"CREATE TABLE {table_name} (\n"
+    create_table_sql_text = f"CREATE TABLE {table_name} (\n"
 
     # Iterate through columns and types to create the column definitions
     for index, (column, data_type) in enumerate(zip(columns, types)):
@@ -36,15 +36,14 @@ def create_table_sql(type_mapping) -> str:
             sql_statements.append(enum_type_sql)
 
             # Use the ENUM type in the CREATE TABLE statement
-            create_table_sql += f"    {column} {enum_type_name},\n"
+            create_table_sql_text += f"    {column} {enum_type_name},\n"
         else:
-            print(f"|create_table_sql|: {data_type}")
             # Map other data types as usual
-            data_type = type_mapping[data_type]
-            create_table_sql += f"    {column} {data_type},\n"
+            data_type = TYPE_MAPPING[data_type]
+            create_table_sql_text += f"    {column} {data_type},\n"
 
-    create_table_sql = create_table_sql.rstrip(",\n") + "\n);"
-    sql_statements.append(create_table_sql)
+    create_table_sql_text = create_table_sql_text.rstrip(",\n") + "\n);"
+    sql_statements.append(create_table_sql_text)
 
     # Join all statements
     full_sql = "\n".join(sql_statements)
@@ -91,8 +90,8 @@ def drop_table_sql() -> str:
     return sql
 
 
-def validate_sql(type_mapping):
-    engine = create_engine(DATABASE_URL)
+def validate_sql():
+    engine = create_engine(DATABASE_URL_VERIFICATION)
     create_analysis_input = st.session_state["create_analysis_input"]
     query = create_analysis_input["query"]
 
@@ -103,7 +102,7 @@ def validate_sql(type_mapping):
             drop_enums_statement = drop_enums_sql()
             if drop_enums_statement != "":  # Only execute if it's not empty
                 conn.execute(sqlalchemy.text(drop_enums_statement))
-            conn.execute(sqlalchemy.text(create_table_sql(type_mapping)))
+            conn.execute(sqlalchemy.text(create_table_sql()))
             conn.execute(sqlalchemy.text(query))
             conn.execute(sqlalchemy.text(drop_table_sql()))
             if drop_enums_statement != "":

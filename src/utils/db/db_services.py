@@ -1,8 +1,8 @@
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, TIMESTAMP, Text, JSON, text
+from sqlalchemy import Column, Integer, String, ForeignKey, TIMESTAMP, Text, JSON, text
 from sqlalchemy.orm import relationship, Session, aliased
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import ENUM
-from sqlalchemy.sql import func, select
+from sqlalchemy.sql import func
 import streamlit as st
 
 from models.analysis import *

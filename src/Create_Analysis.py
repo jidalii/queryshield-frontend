@@ -22,7 +22,7 @@ from utils.row_detection import fake_click, CustomServer
 from utils.auth.jwt_token import decode_jwt_token
 import utils.create_analysis_helper as create_analysis_helper
 
-from configs.configs import SCHEMA_TYPES, TYPE_MAPPING
+from configs.configs import SCHEMA_TYPES
 from configs.html import HTML_CONTENTS
 from configs.secrets import DATABASE_URL
 
@@ -234,7 +234,7 @@ def validate_analysis_details() -> bool:
         st.session_state["isvalid_analysis_details"] = 2
         return False
     else:
-        isValid = validate_sql(TYPE_MAPPING)
+        isValid = validate_sql()
         if isValid:
             st.session_state["isvalid_analysis_details"] = 1
             return True
