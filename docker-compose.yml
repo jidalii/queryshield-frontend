@@ -22,24 +22,6 @@ services:
     networks:
       - queryshield_network
 
-  db_verification:
-    image: postgres:15
-    container_name: db_verification
-    env_file:
-      - .env
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB_VERIFICATION}
-    ports:
-      - "5433:5432"  # Expose on a different host port
-    volumes:
-      - pg_data_verification:/var/lib/postgresql/data
-      - ./sql/db_verification_setup.sql:/docker-entrypoint-initdb.d/db_verification_setup.sql
-    restart: unless-stopped
-    networks:
-      - queryshield_network
-  
   app:
     build:
       context: .
@@ -48,7 +30,6 @@ services:
       - "8501:8501"
     depends_on:
       - db_storage
-      - db_verification
     env_file:
       - .env
     networks:
@@ -56,7 +37,6 @@ services:
 
 volumes:
   pg_data_queryshield:
-  pg_data_verification:
 
 networks:
   queryshield_network:

@@ -1,5 +1,26 @@
 # Querysheild Implementation
 
+## Table of Contents
+
+- [Querysheild Implementation](#querysheild-implementation)
+  - [Table of Contents](#table-of-contents)
+  - [Description](#description)
+  - [Tech Stack](#tech-stack)
+  - [Functionalities](#functionalities)
+  - [Get Started](#get-started)
+    - [1) Configure environment variables](#1-configure-environment-variables)
+    - [2-1) Deploy on Docker](#2-1-deploy-on-docker)
+    - [2-2) Deploy on local](#2-2-deploy-on-local)
+  - [File Structure](#file-structure)
+  - [Database Schema](#database-schema)
+    - [User](#user)
+      - [`user_role` Enum](#user_role-enum)
+      - [`user` table](#user-table)
+    - [Analysis](#analysis)
+      - [`analysis_status` Enum](#analysis_status-enum)
+      - [`analysis` table](#analysis-table)
+      - [`analysis_owners` table](#analysis_owners-table)
+
 ## Description
 
 The repo is the frontend interface of Queryshield, a secure multiparty computation (MPC) cloud service. It leverages the power of cryptographic techniques to enable collaborative computation among multiple parties without compromising the privacy of their data.
@@ -12,13 +33,16 @@ The repo is the frontend interface of Queryshield, a secure multiparty computati
 
 ## Functionalities
 
-- User regisration
-- User login & logout
-- Create analysis Page (for analyst)
-- Analysis History Page (for analyst)
-- Analysis Catalog Page (for data owner)
-- Share Data Page (for data owner)
-- Analysis Detail Page
+- **User Registration & Authentication**
+  - Securely manage user registration and authentication with JWT-based token handling for enhanced security and session management.
+- **Analyst Features**
+  - Create Analysis Page: allows analysts to create new analyses with custom schemas, thread modes, and SQL queries.
+  - Analysis History Page: allow analyst to trace his/her analysis status.
+- **Data Owner Features**
+  - Analysis Catalog Page: allows data owners to view all available analyses, providing an entry point for data sharing.
+  - Share Data Page: allow data owner to do secret data sharing using MPC.
+- Analysis Detail Page: wiew detailed metadata about specific analyses.
+
 
 ## Get Started
 
@@ -77,7 +101,7 @@ You can also run the app on your local machine, rather than using Docker. The fo
     pip install -r requirements.txt
     ```
 
-3. compile the custome streamlit React component
+3. Compile the custom streamlit React component
 
     ```shell
     cd src/secret_share_component
@@ -165,5 +189,5 @@ You can also run the app on your local machine, rather than using Docker. The fo
 
 | Column Name | Column Type                      |
 | ----------- | -------------------------------- |
-| analysis_id | INTEGER REFERENCES user(user_id) |
-| user_id     | INTEGER REFERENCES analysis(aid) |
+| analysis_id | INTEGER REFERENCES analysis(user_id) |
+| user_id     | INTEGER REFERENCES user(aid) |
