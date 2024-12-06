@@ -6,7 +6,7 @@ import pytz
 from components.analysis_history_component import analysis_history_component
 from components.sidebar_login_component import sidebar_login_component
 from utils.auth.jwt_token import decode_jwt_token, is_valid_analysis_detail_view_user
-from utils.db.db_services import fetch_analyst_analysis_history
+from db.db_services import fetch_analyst_analysis_history
 from configs.secrets import DATABASE_URL
 from configs.configs import TIMEZONE
 
@@ -27,8 +27,8 @@ if not ok:
     st.stop()
 
 uid = -1
-if 'user' in payload and 'uid' in payload['user']:
-    uid = payload['user']['uid']
+if "user" in payload and "uid" in payload["user"]:
+    uid = payload["user"]["uid"]
 if uid == -1:
     st.error("Invalid Access.")
     st.stop()

@@ -16,6 +16,8 @@ from typing import Any
 
 from tornado.web import RequestHandler
 
+_JS_TO_PD_COL_OFFSET: int = -2
+
 try:
     payload_memory = SharedMemory(name="JS_PAYLOAD", create=True, size=128)
 except FileExistsError:

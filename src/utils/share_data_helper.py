@@ -2,8 +2,8 @@ import streamlit as st
 import pandas as pd
 import time
 from utils.auth.jwt_token import validate_data_share_access
-from utils.db.db_services import fetch_single_analysis
-from utils.db.db_services import register_data_owner
+from db.db_services import fetch_single_analysis
+from db.db_services import register_data_owner
 from configs.configs import TIMEZONE
 
 

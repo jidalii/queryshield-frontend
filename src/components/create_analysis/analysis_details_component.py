@@ -1,12 +1,12 @@
-
 import streamlit as st
 
 from streamlit_extras.stylable_container import stylable_container
 from models.analysis import *
-from utils.db.schema_validation import *
-from utils.db.db_services import *
+from db.schema_validation import *
+from db.db_services import *
 from utils.row_detection import *
 from configs.html import VALIDATION_CSS
+
 
 def analysis_details_component() -> None:
     create_analysis_input = st.session_state["create_analysis_input"]

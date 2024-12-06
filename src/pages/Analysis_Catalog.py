@@ -3,7 +3,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 
 from components.analysis_catalog_component import analysis_catalog_component
-from utils.db.db_services import fetch_all_analysis_catalog
+from db.db_services import fetch_all_analysis_catalog
 from components.sidebar_login_component import (
     sidebar_login_component,
 )
