@@ -42,7 +42,7 @@ def analysis_history_component(df):
             init(params) {
                 this.eGui = document.createElement('a');
                 this.eGui.innerText = "View Details";
-                this.eGui.setAttribute('href', '/Analysis_Detail_View?aid=' + params.data["aid"]);
+                this.eGui.setAttribute('href', '/Analysis_Detail?aid=' + params.data["aid"]);
                 this.eGui.setAttribute('style', "text-decoration:none");
                 this.eGui.setAttribute('target', "_blank");
             }

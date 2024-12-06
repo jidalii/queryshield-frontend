@@ -426,28 +426,28 @@ def validate_create_analysis_user() -> Tuple[bool, str]:
 
 
 isValidAnalyst, err = validate_create_analysis_user()
-if st.session_state["disabled"]:
-    st.error("Analysis already submitted.")
+# if st.session_state["disabled"]:
+#     st.error("Analysis already submitted.")
+# else:
+if not isValidAnalyst:
+    st.error(f"Error: {err}")
 else:
-    if not isValidAnalyst:
-        st.error(f"Error: {err}")
-    else:
-        if (
-            st.session_state["isvalid_threat_model"] == 1
-            and st.session_state["isvalid_analysis_details"] == 1
-        ):
+    if (
+        st.session_state["isvalid_threat_model"] == 1
+        and st.session_state["isvalid_analysis_details"] == 1
+    ):
 
-            new_analysis = AnalysisCreation(
-                analysis_name=create_analysis_input["query_name"],
-                analyst_id=1,
-                details=data2json(),
-                status="Created",
-            )
-            isSuccess, err = insert_new_analysis(engine, new_analysis)
-            if isSuccess:
-                st.success("Success")
-            else:
-                st.error(f"DB error: {err}")
+        new_analysis = AnalysisCreation(
+            analysis_name=create_analysis_input["query_name"],
+            analyst_id=1,
+            details=data2json(),
+            status="Created",
+        )
+        isSuccess, err = insert_new_analysis(engine, new_analysis)
+        if isSuccess:
+            st.success("Success")
+        else:
+            st.error(f"DB error: {err}")
 
 
 if __name__ == "__main__":

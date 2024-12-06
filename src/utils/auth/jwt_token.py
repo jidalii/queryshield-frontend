@@ -1,15 +1,17 @@
 from typing import Tuple
 import jwt
 from configs.secrets import JWT_SECRET_KEY
+# import logging
 
+# logging.basicConfig(level=logging.DEBUG)
 
 def encode_jwt_token(payload: dict) -> str:
-    return jwt.encode(payload, JWT_SECRET_KEY, algorithm="HS256")
+    return jwt.encode(payload, "secret", algorithm="HS256")
 
 
 def decode_jwt_token(token: str) -> Tuple[bool, str | dict]:
     try:
-        return True, jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
+        return True, jwt.decode(token, "secret", algorithms=["HS256"])
     except jwt.ExpiredSignatureError:
         return False, "Signature expired. Please log in again."
     except jwt.InvalidTokenError:
@@ -36,18 +38,18 @@ def is_valid_analysis_detail_view_user(token: str) -> Tuple[bool, str]:
     return True, uid
 
 
-def is_valid_data_owner(token: str) -> Tuple[bool, str]:
+def is_valid_data_owner(token: str) -> str:
     ok, payload = decode_jwt_token(token)
     if not ok:
-        False, "Invalid Access"
+        False, payload
 
     if (
         "user" in payload
         and "role" in payload["user"]
         and payload["user"]["role"] == "data_owner"
     ):
-        return True, payload["user"]["uid"]
-    return False, "Invalid Access"
+        return True, None
+    return False, "Invalid Role"
 
 
 def validate_data_share_access(token: str) -> Tuple[bool, str]:

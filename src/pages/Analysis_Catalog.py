@@ -16,9 +16,9 @@ st.set_page_config("QueryShield", layout="wide")
 st.title("Analysis Catalog")
 st.sidebar.title("QueryShield")
 
-ok, uid = is_valid_data_owner(st.session_state["jwt_token"])
+ok, err = is_valid_data_owner(st.session_state["jwt_token"])
 if not ok:
-    st.error("Invalid token. Please login again.")
+    st.error(err)
     st.stop()
 
 engine = create_engine(DATABASE_URL)
