@@ -1,8 +1,8 @@
-# Querysheild Implementation
+# Queryshield Implementation
 
 ## Table of Contents
 
-- [Querysheild Implementation](#querysheild-implementation)
+- [Queryshield Implementation](#queryshield-implementation)
   - [Table of Contents](#table-of-contents)
   - [Description](#description)
   - [Tech Stack](#tech-stack)
